@@ -1,0 +1,217 @@
+# Helix Framework Documentation
+
+> A comprehensive roleplay framework for Garry's Mod based on NutScript 1.1
+
+## Core Documentation
+
+- [Architecture Overview](architecture.md): Complete framework architecture, initialization sequence, and system design
+- [Getting Started](manual/getting-started.md): Installation guide, MySQL setup, and schema bootstrapping
+- [Best Practices](best-practices.md): Coding standards, performance optimization, and development guidelines
+- [Converting from Clockwork](manual/converting-from-clockwork.md): Migration guide for Clockwork developers
+
+## Framework Systems
+
+### Core Libraries
+
+- [Utility Library (ix.util)](libraries/util.md): File inclusion, type checking, color manipulation, and helper functions
+- [Data System (ix.data)](libraries/data.md): Key-value data storage and retrieval system
+- [Database System (ix.db)](libraries/database.md): MySQL/SQLite abstraction layer for data persistence
+- [Storage System (ix.storage)](libraries/storage.md): Persistent data storage with JSON, YAML, and binary formats
+- [Networking (ix.net)](libraries/networking.md): Client-server communication and network message handling
+
+### Character Systems
+
+- [Character System (ix.char)](systems/character.md): Character creation, management, and lifecycle
+- [Attributes (ix.attribs)](systems/attributes.md): Character progression and stat systems
+- [Inventory System (ix.inventory)](systems/inventory.md): Grid-based inventory management
+- [Item System (ix.item)](systems/items.md): Item registration, types, and functionality
+- [Faction System (ix.faction)](systems/factions.md): Team/faction management and configuration
+- [Class System (ix.class)](systems/classes.md): Job/role assignment within factions
+
+### Gameplay Systems
+
+- [Command System (ix.command)](systems/commands.md): Command registration, argument parsing, and validation
+- [Chat System (ix.chatbox)](systems/chat.md): IC/OOC/LOOC chat modes and custom chat types
+- [Configuration (ix.config)](systems/configuration.md): Server and client configuration management
+- [Options System (ix.option)](systems/options.md): User preferences and client settings
+- [Currency System (ix.currency)](systems/currency.md): Money handling and transactions
+- [Business System (ix.business)](systems/business.md): Property and business ownership
+- [Flag System (ix.flag)](systems/flags.md): Permission flags and access control
+
+### User Interface
+
+- [Derma Overview](ui/derma-overview.md): UI component system and framework
+- [HUD System (ix.bar)](ui/hud.md): Status bars, health, stamina, and custom displays
+- [Menu System (ix.menu)](ui/menus.md): Main menu, F1 menu, and tab navigation
+- [Markup System (ix.markup)](ui/markup.md): Rich text rendering and formatting
+- [Inventory UI](ui/inventory.md): Drag-and-drop inventory interface
+- [Character Creation](ui/character-creation.md): Character creation and selection screens
+- [Notifications](ui/notifications.md): Notice system and status messages
+
+### Plugin Development
+
+- [Plugin System (ix.plugin)](plugins/plugin-system.md): Plugin architecture, loading, and hooks
+- [Creating Plugins](plugins/creating-plugins.md): Step-by-step plugin development guide
+- [Plugin Structure](plugins/plugin-structure.md): Directory structure and file organization
+- [Hook System](plugins/hooks.md): Available hooks and event handling
+- [Plugin Best Practices](plugins/best-practices.md): Guidelines for quality plugin development
+
+### Advanced Topics
+
+- [Animation System (ix.anim)](advanced/animations.md): Animation definitions and model support
+- [Log System (ix.log)](advanced/logging.md): Event logging and debugging
+- [Date/Time System (ix.date)](advanced/datetime.md): Date and time utilities
+- [Language System (ix.language)](advanced/localization.md): Multi-language support and localization
+- [Meta Tables](advanced/meta-tables.md): Extended Garry's Mod entity methods
+- [Type System](advanced/type-system.md): Type validation and command argument types
+- [CAMI Integration](advanced/cami.md): Permission and admin system integration
+
+## API Reference
+
+### Core Functions
+
+- [Global Functions (ix.*)](#): Core framework functions and utilities
+- [Utility Functions (ix.util.*)](#): Helper and utility functions
+- [Meta Extensions](#): Player, Character, Entity, and Item meta table methods
+
+### Library Reference
+
+- [ix.attribs](api/attribs.md): Attribute registration and management
+- [ix.char](api/character.md): Character class and methods
+- [ix.chatbox](api/chat.md): Chat registration and message handling
+- [ix.class](api/class.md): Class registration and assignment
+- [ix.command](api/command.md): Command creation and execution
+- [ix.config](api/config.md): Configuration variable registration
+- [ix.currency](api/currency.md): Currency handling functions
+- [ix.data](api/data.md): Data storage and retrieval
+- [ix.date](api/date.md): Date and time functions
+- [ix.db](api/database.md): Database query functions
+- [ix.faction](api/faction.md): Faction registration and methods
+- [ix.flag](api/flag.md): Permission flag management
+- [ix.inventory](api/inventory.md): Inventory creation and management
+- [ix.item](api/item.md): Item registration and handling
+- [ix.language](api/language.md): Localization functions
+- [ix.log](api/log.md): Logging functions
+- [ix.menu](api/menu.md): Menu registration
+- [ix.net](api/networking.md): Network message functions
+- [ix.notice](api/notice.md): Notification functions
+- [ix.option](api/option.md): User option registration
+- [ix.plugin](api/plugin.md): Plugin management functions
+- [ix.storage](api/storage.md): Data persistence functions
+- [ix.util](api/util.md): Utility helper functions
+
+## Item Types
+
+- [Base Items](items/base-items.md): Base item classes and inheritance
+- [Weapons](items/weapons.md): Weapon items and configuration
+- [Ammunition](items/ammunition.md): Ammo items and weapon integration
+- [Bags/Containers](items/bags.md): Container items with internal inventory
+- [Outfits](items/outfits.md): Clothing and bodygroup items
+- [PAC Outfits](items/pac-outfits.md): PAC3 customization items
+- [Custom Item Types](items/custom-items.md): Creating new item types
+
+## Entities
+
+- [Item Entity (ix_item)](entities/ix_item.md): Dropped item entity
+- [Money Entity (ix_money)](entities/ix_money.md): Dropped currency entity
+- [Shipment Entity (ix_shipment)](entities/ix_shipment.md): Bulk item purchases
+- [Vendor Entity (ix_vendor)](entities/ix_vendor.md): NPC vendor entity
+- [Custom Entities](entities/custom-entities.md): Creating custom entities
+
+## Base Plugins
+
+- [3D Panel](plugins/3dpanel.md): World panel system
+- [3D Text](plugins/3dtext.md): 3D text rendering
+- [Ammo Save](plugins/ammosave.md): Ammunition persistence
+- [Area](plugins/area.md): Area/zone management system
+- [Business](plugins/business.md): Property ownership
+- [Chatbox](plugins/chatbox.md): Advanced chat interface
+- [Combining](plugins/combining.md): Item combining/crafting
+- [Containers](plugins/containers.md): Storage container system
+- [Crosshair](plugins/crosshair.md): Weapon crosshair display
+- [Doors](plugins/doors.md): Door ownership and access
+- [Logging](plugins/logging.md): Server event logging
+- [Map Scene](plugins/mapscene.md): Character selection scenes
+- [Observer](plugins/observer.md): Spectator mode
+- [PAC](plugins/pac.md): PAC3 integration
+- [Permakill](plugins/permakill.md): Permanent character death
+- [Persistence](plugins/persistence.md): Map/world persistence
+- [Property Protection](plugins/propprotect.md): Prop ownership
+- [Recognition](plugins/recognition.md): Character recognition/fame
+- [Save Items](plugins/saveitems.md): Item persistence
+- [Spawns](plugins/spawns.md): Spawn point management
+- [Spawn Saver](plugins/spawnsaver.md): Player spawn locations
+- [Stamina](plugins/stamina.md): Stamina and endurance system
+- [Strength](plugins/strength.md): Strength attribute system
+- [Third Person](plugins/thirdperson.md): Third-person camera
+- [Typing](plugins/typing.md): Typing indicator
+- [Vendor](plugins/vendor.md): NPC vendor system
+- [Weapon Selection](plugins/wepselect.md): Weapon selection UI
+
+## Schema Development
+
+- [Schema Structure](schema/structure.md): Schema organization and files
+- [Schema Configuration](schema/configuration.md): Schema-specific settings
+- [Creating Factions](schema/factions.md): Faction definition and setup
+- [Creating Classes](schema/classes.md): Class definition and configuration
+- [Creating Items](schema/items.md): Schema-specific items
+- [Custom Commands](schema/commands.md): Schema command registration
+- [Custom Hooks](schema/hooks.md): Schema hook implementation
+- [Custom Derma](schema/derma.md): Schema-specific UI elements
+
+## Development Guides
+
+- [Setting Up Development Environment](guides/setup.md): Tools, IDE, and debugging setup
+- [Creating Your First Plugin](guides/first-plugin.md): Tutorial for beginners
+- [Creating Custom Items](guides/custom-items.md): Item creation walkthrough
+- [Creating Commands](guides/commands.md): Command system tutorial
+- [Working with Inventories](guides/inventories.md): Inventory manipulation guide
+- [Database Operations](guides/database.md): Working with the database
+- [Networking Guide](guides/networking.md): Client-server communication
+- [UI Development](guides/ui-development.md): Creating Derma interfaces
+- [Hook Usage](guides/hooks.md): Understanding and using hooks
+- [Debugging](guides/debugging.md): Debugging techniques and tools
+
+## Configuration Reference
+
+- [Server Configuration](config/server.md): Server-side settings
+- [Character Settings](config/characters.md): Character-related options
+- [Chat Settings](config/chat.md): Chat system configuration
+- [Appearance Settings](config/appearance.md): Visual customization
+- [Inventory Settings](config/inventory.md): Inventory configuration
+- [Database Configuration](config/database.md): MySQL/SQLite setup
+
+## Examples
+
+- [Example Plugin](examples/plugin.md): Complete plugin example
+- [Example Item](examples/item.md): Custom item implementation
+- [Example Command](examples/command.md): Command with validation
+- [Example Faction](examples/faction.md): Faction definition
+- [Example Class](examples/class.md): Class definition
+- [Example Derma Panel](examples/derma.md): Custom UI panel
+- [Example Hook Usage](examples/hooks.md): Common hook patterns
+
+## Troubleshooting
+
+- [Common Issues](troubleshooting/common-issues.md): Frequently encountered problems
+- [Database Issues](troubleshooting/database.md): Database connection and query problems
+- [Plugin Conflicts](troubleshooting/conflicts.md): Resolving plugin conflicts
+- [Performance Issues](troubleshooting/performance.md): Optimization and profiling
+
+## Community Resources
+
+- Official Website: https://gethelix.co
+- Documentation: https://docs.gethelix.co
+- Plugin Center: https://plugins.gethelix.co
+- Discord: https://discord.gg/2AutUcF
+- GitHub: https://github.com/nebulouscloud/helix
+- HL2 RP Schema: https://github.com/nebulouscloud/helix-hl2rp
+- Skeleton Schema: https://github.com/nebulouscloud/helix-skeleton
+
+## Version Information
+
+- Framework: Helix
+- Base: NutScript 1.1
+- Platform: Garry's Mod
+- Language: Lua
+- Documentation Generated: 2025-11-05
