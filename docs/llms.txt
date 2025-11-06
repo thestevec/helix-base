@@ -124,9 +124,8 @@
 - [3D Text](plugins/3dtext.md): 3D text rendering
 - [Ammo Save](plugins/ammosave.md): Ammunition persistence
 - [Area](plugins/area.md): Area/zone management system
-- [Business](plugins/business.md): Property ownership
+- [Business](systems/business.md): Property ownership
 - [Chatbox](plugins/chatbox.md): Advanced chat interface
-- [Combining](plugins/combining.md): Item combining/crafting
 - [Containers](plugins/containers.md): Storage container system
 - [Crosshair](plugins/crosshair.md): Weapon crosshair display
 - [Doors](plugins/doors.md): Door ownership and access
