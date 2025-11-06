@@ -1,588 +1,115 @@
-# Creating Schema Classes
+# Creating Classes for Your Schema
 
 > **Reference**: `gamemode/core/libs/sh_class.lua`, `schema/classes/`
 
-Classes are temporary jobs within factions. This guide shows how to create classes specifically for your schema.
+This guide shows you how to create custom classes (jobs/roles) for your schema. Classes are temporary positions within factions that characters can join and leave.
 
 ## ⚠️ Important: Use Helix Class System
 
-**Always use Helix's built-in class registration** rather than creating custom job systems. The framework provides:
-- Automatic registration from `schema/classes/` folder
-- Join/leave functionality
-- Player limit management
-- Permission checking
-- Database persistence
+**Always create classes in `schema/classes/`** rather than implementing custom job systems. The framework provides:
+- Automatic class registration from files
+- Join/leave functionality with validation
+- Player limits per class
+- Permission checking integration
+- Database persistence of class assignment
 
 ## Core Concepts
 
-### What are Schema Classes?
+### Class vs Faction
 
-Classes are optional jobs within factions:
-- **Police Faction** → Police Chief, Police Officer, Police Recruit
-- **Medical Faction** → Doctor, Nurse, Paramedic
-- **Resistance** → Squad Leader, Fighter, Scout
+Understanding the difference:
 
-Key points:
-- Classes are optional (characters can exist without a class)
-- Characters can only join classes in their faction
-- Joining a class automatically leaves the previous class
-- Classes can have player limits
-
-## Creating Classes
-
-### File Location
-
-**Place class files** in:
 ```
-schema/classes/sh_classname.lua
+Faction (Permanent)          Class (Temporary)
+─────────────────           ─────────────────
+Police Force         ───>   Police Chief
+                     ───>   Police Officer
+                     ───>   Police Cadet
+
+Medical Staff        ───>   Head Doctor
+                     ───>   Surgeon
+                     ───>   Nurse
 ```
 
-**File naming convention**:
-- `sh_` prefix (shared realm)
-- Descriptive class name
-- `.lua` extension
+- **Faction**: Set at character creation, permanent
+- **Class**: Can be changed in-game, temporary job/role
 
-Examples:
-- `sh_police_chief.lua`
-- `sh_doctor.lua`
-- `sh_squad_leader.lua`
+### When to Use Classes
 
-### Basic Class Template
+Use classes for:
+- Leadership positions (Chief, Captain, Leader)
+- Specialized roles (Sniper, Engineer, Medic)
+- Ranks within factions (Recruit, Veteran, Elite)
+- Limited positions (1 Mayor, 2 Judges, 4 SWAT)
+
+**Don't use classes** if you just need different loadouts - use character data or items instead.
+
+## Creating Your First Class
+
+### Step 1: Create Class File
+
+Create a new file in `schema/classes/`:
 
 ```lua
--- schema/classes/sh_officer.lua
+-- File: schema/classes/sh_officer.lua
 CLASS.name = "Police Officer"
 CLASS.description = "Standard patrol officer"
-CLASS.faction = FACTION_POLICE  -- Faction index (required)
-CLASS.limit = 8                 -- Max 8 officers at once
+CLASS.faction = FACTION_POLICE  -- Must match a faction index
+CLASS.limit = 8  -- Max 8 officers online (0 = unlimited)
 
-function CLASS:OnSet(client)
-    client:SetHealth(100)
-    client:Give("weapon_pistol")
-end
-
-function CLASS:OnRemoved(client)
-    client:StripWeapon("weapon_pistol")
-end
-```
-
-**⚠️ Do NOT**:
-```lua
--- WRONG: Don't create custom job systems
-JOBS = {}
-JOBS["officer"] = {...}
-
--- WRONG: Don't bypass the class system
-function CustomJobSystem()
-    -- Don't do this!
-end
-```
-
-## Required Properties
-
-### Minimal Requirements
-
-```lua
-CLASS.name = "Class Name"          -- REQUIRED
-CLASS.faction = FACTION_INDEX      -- REQUIRED (must be valid faction)
-```
-
-**⚠️ If missing faction**: Class will not load properly.
-
-## Common Class Examples
-
-### Police Chief
-
-```lua
--- schema/classes/sh_police_chief.lua
-CLASS.name = "Police Chief"
-CLASS.description = "Leader of the police force"
-CLASS.faction = FACTION_POLICE
-CLASS.limit = 1  -- Only one chief
-CLASS.pay = 200
-
+-- Optional: Equipment given on spawn
 CLASS.weapons = {
-    "weapon_pistol",
-    "weapon_shotgun"
+    "weapon_pistol"
 }
 
-function CLASS:CanSwitchTo(client)
-    local character = client:GetCharacter()
-
-    -- Must have chief flag
-    if not character:HasFlags("c") then
-        return false, "You are not authorized"
-    end
-
-    -- Must be rank 5+
-    local rank = character:GetData("rank", 0)
-    if rank < 5 then
-        return false, "Requires rank 5"
-    end
-
-    return true
-end
-
-function CLASS:OnSet(client)
-    -- Set stats
-    client:SetHealth(150)
-    client:SetArmor(100)
-    client:SetRunSpeed(250)
-
-    -- Give weapons
-    for _, weapon in ipairs(self.weapons) do
-        client:Give(weapon)
-    end
-
-    -- Give items
-    local inventory = client:GetCharacter():GetInventory()
-    inventory:Add("item_radio_command")
-
-    -- Announce
-    client:ChatPrint("You are now the Police Chief")
-    PrintMessage(HUD_PRINTTALK, client:Name() .. " is now the Police Chief")
-end
-
-function CLASS:OnRemoved(client)
-    for _, weapon in ipairs(self.weapons) do
-        client:StripWeapon(weapon)
-    end
-
-    client:SetHealth(100)
-    client:SetArmor(0)
-    client:SetRunSpeed(240)
-end
-```
-
-### Police Officer
-
-```lua
--- schema/classes/sh_police_officer.lua
-CLASS.name = "Police Officer"
-CLASS.description = "Standard patrol officer"
-CLASS.faction = FACTION_POLICE
-CLASS.limit = 8
-CLASS.pay = 100
-
+-- Called when player joins this class
 function CLASS:OnSet(client)
     client:SetHealth(100)
     client:SetArmor(50)
 
-    client:Give("weapon_pistol")
-    client:Give("weapon_stunstick")
-
-    local inventory = client:GetCharacter():GetInventory()
-    inventory:Add("item_radio")
-end
-
-function CLASS:OnRemoved(client)
-    client:StripWeapon("weapon_pistol")
-    client:StripWeapon("weapon_stunstick")
-end
-```
-
-### Medical Doctor
-
-```lua
--- schema/classes/sh_doctor.lua
-CLASS.name = "Doctor"
-CLASS.description = "Medical professional"
-CLASS.faction = FACTION_MEDICAL
-CLASS.limit = 4
-CLASS.pay = 150
-
-function CLASS:OnSet(client)
-    local inventory = client:GetCharacter():GetInventory()
-
-    -- Give medical supplies
-    inventory:Add("item_medkit")
-    inventory:Add("item_medkit")
-    inventory:Add("item_defibrillator")
-    inventory:Add("item_bandage")
-
-    -- Faster movement
-    client:SetRunSpeed(260)
-
-    client:ChatPrint("You are now a Doctor")
-end
-
-function CLASS:OnRemoved(client)
-    client:SetRunSpeed(240)
-end
-```
-
-### Resistance Squad Leader
-
-```lua
--- schema/classes/sh_squad_leader.lua
-CLASS.name = "Squad Leader"
-CLASS.description = "Leads resistance squads"
-CLASS.faction = FACTION_RESISTANCE
-CLASS.limit = 2
-CLASS.pay = 75
-
-function CLASS:CanSwitchTo(client)
-    local character = client:GetCharacter()
-
-    -- Require leadership flag
-    if not character:HasFlags("l") then
-        return false, "You lack leadership training"
-    end
-
-    -- Require playtime
-    local playtime = character:GetData("playtime", 0)
-    if playtime < 3600 then  -- 1 hour
-        return false, "Need 1 hour playtime"
-    end
-
-    return true
-end
-
-function CLASS:OnSet(client)
-    local char = client:GetCharacter()
-    local inventory = char:GetInventory()
-
-    -- Leadership equipment
-    inventory:Add("item_radio_encrypted")
-    inventory:Add("item_map")
-    inventory:Add("item_compass")
-
-    client:SetHealth(125)
-    client:SetRunSpeed(270)
-
-    -- Announce to faction
-    for _, ply in ipairs(player.GetAll()) do
-        local plyChr = ply:GetCharacter()
-        if plyChr and plyChr:GetFaction() == FACTION_RESISTANCE then
-            ply:ChatPrint(client:Name() .. " is now a Squad Leader")
-        end
-    end
-end
-
-function CLASS:OnRemoved(client)
-    client:SetHealth(100)
-    client:SetRunSpeed(260)
-end
-```
-
-## Class Properties
-
-### Required Properties
-
-```lua
-CLASS.name = "Class Name"           -- Display name (REQUIRED)
-CLASS.faction = FACTION_INDEX       -- Faction index (REQUIRED)
-```
-
-### Optional Properties
-
-```lua
-CLASS.description = "Description"   -- Shown in class selection
-CLASS.limit = 0                     -- Max players (0 = unlimited)
-CLASS.pay = 100                     -- Salary amount
-CLASS.weapons = {...}               -- Weapons given on set
-```
-
-## Class Functions
-
-### CanSwitchTo
-
-**Reference**: `gamemode/core/libs/sh_class.lua:66`
-
-Check if player can join this class:
-
-```lua
-function CLASS:CanSwitchTo(client)
-    local character = client:GetCharacter()
-
-    -- Check flag
-    if not character:HasFlags("o") then
-        return false, "You need officer flag"
-    end
-
-    -- Check rank
-    local rank = character:GetData("rank", 0)
-    if rank < self.requiredRank or 3 then
-        return false, "Insufficient rank"
-    end
-
-    -- Check money
-    if not character:HasMoney(self.joinCost or 0) then
-        return false, "Costs " .. (self.joinCost or 0)
-    end
-
-    return true
-end
-```
-
-### OnSet
-
-Called when player joins the class:
-
-```lua
-function CLASS:OnSet(client)
-    local character = client:GetCharacter()
-    local inventory = character:GetInventory()
-
-    -- Give weapons
-    for _, weapon in ipairs(self.weapons or {}) do
+    -- Give equipment
+    for _, weapon in ipairs(self.weapons) do
         client:Give(weapon)
     end
 
-    -- Give items
-    inventory:Add("item_badge")
-    inventory:Add("item_radio")
-
-    -- Set stats
-    client:SetHealth(self.health or 100)
-    client:SetArmor(self.armor or 0)
-    client:SetRunSpeed(self.runSpeed or 240)
-
-    -- Charge join cost
-    if self.joinCost and self.joinCost > 0 then
-        character:TakeMoney(self.joinCost)
-    end
-
-    -- Notify
     client:ChatPrint("You are now a " .. self.name)
 end
-```
 
-### OnRemoved
-
-Called when player leaves the class:
-
-```lua
+-- Called when player leaves this class
 function CLASS:OnRemoved(client)
-    -- Remove weapons
-    for _, weapon in ipairs(self.weapons or {}) do
+    -- Remove class weapons
+    for _, weapon in ipairs(self.weapons) do
         client:StripWeapon(weapon)
     end
 
-    -- Reset stats
-    client:SetHealth(100)
     client:SetArmor(0)
-    client:SetRunSpeed(240)
-
-    client:ChatPrint("You left " .. self.name)
+    client:ChatPrint("You are no longer a " .. self.name)
 end
+
+-- Store class index for later use
+CLASS_OFFICER = CLASS.index
 ```
 
-## Advanced Class Features
+### Step 2: Create Join Command
 
-### Paid Classes
+Classes need commands or UI for players to join them:
 
 ```lua
-CLASS.name = "Elite Officer"
-CLASS.description = "Premium police role"
-CLASS.faction = FACTION_POLICE
-CLASS.limit = 2
-CLASS.joinCost = 500  -- Costs $500 to join
-
-function CLASS:CanSwitchTo(client)
-    local character = client:GetCharacter()
-
-    if not character:HasMoney(self.joinCost) then
-        return false, "Costs " .. ix.currency.Get(self.joinCost)
-    end
-
-    return true
-end
-
-function CLASS:OnSet(client)
-    local character = client:GetCharacter()
-
-    -- Take money
-    character:TakeMoney(self.joinCost)
-
-    -- Give premium equipment
-    client:SetHealth(150)
-    client:SetArmor(100)
-    client:Give("weapon_smg1")
-end
-```
-
-### Timed Class Duration
-
-```lua
-CLASS.name = "Temporary Role"
-CLASS.description = "30 minute assignment"
-CLASS.faction = FACTION_CITIZEN
-CLASS.limit = 1
-CLASS.duration = 1800  -- 30 minutes
-
-function CLASS:OnSet(client)
-    -- Start timer
-    timer.Create("ClassTimer_" .. client:SteamID(), self.duration, 1, function()
-        if IsValid(client) then
-            local character = client:GetCharacter()
-            if character and character:GetClass() == self.index then
-                character:KickClass()
-                client:Notify("Your " .. self.name .. " shift has ended")
-            end
-        end
-    end)
-
-    client:Notify("You have " .. (self.duration / 60) .. " minutes")
-end
-
-function CLASS:OnRemoved(client)
-    timer.Remove("ClassTimer_" .. client:SteamID())
-end
-```
-
-### Rank-Based Requirements
-
-```lua
-CLASS.name = "Lieutenant"
-CLASS.description = "Requires rank 4+"
-CLASS.faction = FACTION_POLICE
-CLASS.limit = 3
-CLASS.requiredRank = 4
-
-function CLASS:CanSwitchTo(client)
-    local character = client:GetCharacter()
-    local rank = character:GetData("rank", 0)
-
-    if rank < self.requiredRank then
-        return false, "Requires rank " .. self.requiredRank
-    end
-
-    return true
-end
-```
-
-## Multiple Class Schema Example
-
-### Police faction classes
-
-```
-schema/classes/
-├── sh_police_chief.lua      -- Limit 1, requires flag
-├── sh_police_lieutenant.lua -- Limit 2, requires rank
-├── sh_police_officer.lua    -- Limit 8, basic
-└── sh_police_recruit.lua    -- Unlimited, no requirements
-```
-
-### Police Recruit
-
-```lua
--- sh_police_recruit.lua
-CLASS.name = "Police Recruit"
-CLASS.description = "Entry-level officer"
-CLASS.faction = FACTION_POLICE
-CLASS.limit = 0  -- Unlimited
-CLASS.pay = 50
-
-function CLASS:OnSet(client)
-    client:Give("weapon_stunstick")
-    client:SetHealth(75)
-
-    client:ChatPrint("You are now a Recruit")
-end
-
-function CLASS:OnRemoved(client)
-    client:StripWeapon("weapon_stunstick")
-    client:SetHealth(100)
-end
-```
-
-### Police Officer
-
-```lua
--- sh_police_officer.lua
-CLASS.name = "Police Officer"
-CLASS.description = "Standard patrol officer"
-CLASS.faction = FACTION_POLICE
-CLASS.limit = 8
-CLASS.pay = 100
-
-function CLASS:CanSwitchTo(client)
-    local rank = client:GetCharacter():GetData("rank", 0)
-    return rank >= 2, "Requires rank 2"
-end
-
-function CLASS:OnSet(client)
-    client:Give("weapon_stunstick")
-    client:Give("weapon_pistol")
-    client:SetHealth(100)
-    client:SetArmor(50)
-end
-```
-
-### Police Lieutenant
-
-```lua
--- sh_police_lieutenant.lua
-CLASS.name = "Lieutenant"
-CLASS.description = "Senior officer"
-CLASS.faction = FACTION_POLICE
-CLASS.limit = 2
-CLASS.pay = 150
-
-function CLASS:CanSwitchTo(client)
-    local char = client:GetCharacter()
-    local rank = char:GetData("rank", 0)
-
-    if rank < 4 then
-        return false, "Requires rank 4"
-    end
-
-    if not char:HasFlags("l") then
-        return false, "Requires lieutenant flag"
-    end
-
-    return true
-end
-
-function CLASS:OnSet(client)
-    client:SetHealth(125)
-    client:SetArmor(75)
-    client:Give("weapon_pistol")
-    client:Give("weapon_smg1")
-end
-```
-
-## Best Practices
-
-### ✅ DO
-
-- Place class files in `schema/classes/` folder
-- Use `sh_` prefix for class files
-- Always set CLASS.faction to valid faction index
-- Use CLASS:CanSwitchTo() for requirements
-- Use CLASS:OnSet() for equipment/stats
-- Use CLASS:OnRemoved() for cleanup
-- Set limits for leadership/special roles
-- Use descriptive class names
-
-### ❌ DON'T
-
-- Don't create classes without valid faction
-- Don't forget to check faction match
-- Don't implement custom job systems
-- Don't forget cleanup in OnRemoved()
-- Don't give unlimited powerful classes
-- Don't bypass class system with custom code
-
-## Common Patterns
-
-### Class Selection Command
-
-```lua
--- In schema or plugin
+-- File: schema/commands/sh_becomeclass.lua
 ix.command.Add("BecomeClass", {
-    description = "Join a class",
-    arguments = {ix.type.string},
+    description = "Join a class in your faction",
+    arguments = {ix.type.string},  -- Class name
     OnRun = function(self, client, className)
         local character = client:GetCharacter()
-        local factionID = character:GetFaction()
+        if not character then
+            return "No active character"
+        end
 
-        -- Find matching class
+        -- Find class by name in player's faction
         local targetClass
         for _, class in ipairs(ix.class.list) do
             if string.lower(class.name) == string.lower(className) then
-                if class.faction == factionID then
+                if class.faction == character:GetFaction() then
                     targetClass = class
                     break
                 end
@@ -609,78 +136,560 @@ ix.command.Add("BecomeClass", {
 })
 ```
 
-### Class-Specific Abilities
+### Step 3: Test Your Class
+
+1. Restart server
+2. Create character in the faction
+3. Use `/becomeclass officer` command
+4. Verify class equipment and effects
+
+## Class Properties
+
+### Required Properties
 
 ```lua
--- In schema hooks
-function Schema:KeyPress(client, key)
+CLASS.name = "Class Name"        -- REQUIRED: Display name
+CLASS.faction = FACTION_INDEX    -- REQUIRED: Faction index
+```
+
+**⚠️ Missing faction will cause class to not load!**
+
+### Common Properties
+
+```lua
+CLASS.description = "Description"  -- Shown in class selection
+CLASS.limit = 0                    -- Max players (0 = unlimited)
+CLASS.pay = 100                    -- Additional salary
+CLASS.weapons = {}                 -- Weapons given on spawn
+CLASS.health = 100                 -- Health when joining
+CLASS.armor = 0                    -- Armor when joining
+```
+
+## Complete Class Examples
+
+### Police Chief (Leadership)
+
+```lua
+-- File: schema/classes/sh_chief.lua
+CLASS.name = "Police Chief"
+CLASS.description = "Leader of the police force"
+CLASS.faction = FACTION_POLICE
+CLASS.limit = 1  -- Only one chief allowed
+
+CLASS.weapons = {
+    "weapon_pistol",
+    "weapon_shotgun",
+    "weapon_stunstick"
+}
+
+CLASS.health = 150
+CLASS.armor = 100
+CLASS.pay = 200  -- Higher salary
+
+-- Custom join requirements
+function CLASS:CanSwitchTo(client)
+    local character = client:GetCharacter()
+
+    -- Must have chief flag
+    if not character:HasFlags("c") then
+        return false, "You need the Chief flag to join this class"
+    end
+
+    -- Must have minimum rank
+    local rank = character:GetData("rank", 0)
+    if rank < 5 then
+        return false, "You need rank 5 or higher"
+    end
+
+    -- Must have playtime
+    local playtime = character:GetData("playtime", 0)
+    if playtime < 3600 then  -- 1 hour
+        return false, "You need at least 1 hour of playtime"
+    end
+
+    return true
+end
+
+function CLASS:OnSet(client)
+    -- Set stats
+    client:SetHealth(self.health)
+    client:SetArmor(self.armor)
+
+    -- Give all weapons
+    for _, weapon in ipairs(self.weapons) do
+        client:Give(weapon)
+    end
+
+    -- Give special equipment
+    local inventory = client:GetCharacter():GetInventory()
+    inventory:Add("item_radio_command")
+    inventory:Add("item_keycard_chief")
+
+    -- Announce
+    for _, ply in ipairs(player.GetAll()) do
+        ply:ChatPrint(client:Name() .. " is now the Police Chief!")
+    end
+end
+
+function CLASS:OnRemoved(client)
+    -- Remove weapons
+    for _, weapon in ipairs(self.weapons) do
+        client:StripWeapon(weapon)
+    end
+
+    -- Reset stats
+    client:SetHealth(100)
+    client:SetArmor(0)
+
+    -- Announce
+    for _, ply in ipairs(player.GetAll()) do
+        ply:ChatPrint(client:Name() .. " is no longer the Police Chief")
+    end
+end
+
+CLASS_CHIEF = CLASS.index
+```
+
+### SWAT Operative (Limited Special Role)
+
+```lua
+-- File: schema/classes/sh_swat.lua
+CLASS.name = "SWAT Operative"
+CLASS.description = "Special weapons and tactics officer"
+CLASS.faction = FACTION_POLICE
+CLASS.limit = 4  -- Only 4 SWAT members
+
+CLASS.weapons = {
+    "weapon_ar2",
+    "weapon_pistol",
+    "weapon_stunstick"
+}
+
+CLASS.health = 150
+CLASS.armor = 100
+CLASS.pay = 150
+
+function CLASS:CanSwitchTo(client)
+    local character = client:GetCharacter()
+
+    -- Must have SWAT flag
+    if not character:HasFlags("w") then
+        return false, "You need SWAT certification"
+    end
+
+    -- Must be rank 3+
+    local rank = character:GetData("rank", 0)
+    if rank < 3 then
+        return false, "You need rank 3 to join SWAT"
+    end
+
+    return true
+end
+
+function CLASS:OnSet(client)
+    client:SetHealth(self.health)
+    client:SetArmor(self.armor)
+    client:SetRunSpeed(260)  -- Faster movement
+
+    for _, weapon in ipairs(self.weapons) do
+        client:Give(weapon)
+    end
+
+    -- Give equipment
+    local inventory = client:GetCharacter():GetInventory()
+    inventory:Add("item_flashbang")
+    inventory:Add("item_flashbang")
+
+    client:ChatPrint("You are now SWAT. Coordinate with your team!")
+end
+
+function CLASS:OnRemoved(client)
+    for _, weapon in ipairs(self.weapons) do
+        client:StripWeapon(weapon)
+    end
+
+    client:SetHealth(100)
+    client:SetArmor(0)
+    client:SetRunSpeed(240)  -- Reset speed
+end
+
+CLASS_SWAT = CLASS.index
+```
+
+### Medic (Support Role)
+
+```lua
+-- File: schema/classes/sh_medic.lua
+CLASS.name = "Field Medic"
+CLASS.description = "Medical support specialist"
+CLASS.faction = FACTION_RESISTANCE
+CLASS.limit = 3
+
+CLASS.weapons = {}  -- No weapons, medics focus on healing
+
+function CLASS:CanSwitchTo(client)
+    -- Anyone in resistance can be medic
+    return true
+end
+
+function CLASS:OnSet(client)
+    local inventory = client:GetCharacter():GetInventory()
+
+    -- Give medical supplies
+    inventory:Add("item_medkit")
+    inventory:Add("item_medkit")
+    inventory:Add("item_bandage")
+    inventory:Add("item_bandage")
+    inventory:Add("item_defibrillator")
+
+    -- Faster movement
+    client:SetRunSpeed(260)
+
+    client:ChatPrint("You are now a Field Medic. Help your team!")
+end
+
+function CLASS:OnRemoved(client)
+    client:SetRunSpeed(240)  -- Reset speed
+end
+
+-- Passive health regeneration
+function CLASS:OnThink(client)
+    if client:Health() < client:GetMaxHealth() then
+        client:SetHealth(math.min(client:Health() + 0.05, client:GetMaxHealth()))
+    end
+end
+
+CLASS_MEDIC = CLASS.index
+```
+
+### Engineer (Resource Role)
+
+```lua
+-- File: schema/classes/sh_engineer.lua
+CLASS.name = "Engineer"
+CLASS.description = "Technical specialist and builder"
+CLASS.faction = FACTION_RESISTANCE
+CLASS.limit = 2
+
+CLASS.weapons = {
+    "weapon_physcannon"
+}
+
+function CLASS:OnSet(client)
+    local inventory = client:GetCharacter():GetInventory()
+
+    -- Give engineering tools
+    inventory:Add("item_toolbox")
+    inventory:Add("item_welder")
+    inventory:Add("item_metal_scrap")
+    inventory:Add("item_metal_scrap")
+
+    for _, weapon in ipairs(self.weapons) do
+        client:Give(weapon)
+    end
+
+    -- Set data for engineer abilities
+    client:GetCharacter():SetData("canBuild", true)
+end
+
+function CLASS:OnRemoved(client)
+    for _, weapon in ipairs(self.weapons) do
+        client:StripWeapon(weapon)
+    end
+
+    client:GetCharacter():SetData("canBuild", false)
+end
+
+CLASS_ENGINEER = CLASS.index
+```
+
+## Class Functions
+
+### CanSwitchTo
+
+**Reference**: `gamemode/core/libs/sh_class.lua:66`
+
+Check if player can join this class:
+
+```lua
+function CLASS:CanSwitchTo(client)
+    local character = client:GetCharacter()
+
+    -- Check flag
+    if not character:HasFlags("s") then
+        return false, "You need the sniper flag"
+    end
+
+    -- Check rank
+    local rank = character:GetData("rank", 0)
+    if rank < self.requiredRank or 3 then
+        return false, "Insufficient rank: " .. self.requiredRank
+    end
+
+    -- Check money (paid classes)
+    if self.joinCost and self.joinCost > 0 then
+        if not character:HasMoney(self.joinCost) then
+            return false, "Costs $" .. self.joinCost
+        end
+    end
+
+    -- Check time requirement
+    local playtime = character:GetData("playtime", 0)
+    if playtime < 1800 then  -- 30 minutes
+        return false, "Need 30 minutes playtime"
+    end
+
+    return true
+end
+```
+
+### OnSet
+
+**Reference**: `gamemode/core/libs/sh_class.lua` (called when joining)
+
+Called when player successfully joins this class:
+
+```lua
+function CLASS:OnSet(client)
+    -- Set health/armor
+    client:SetHealth(self.health or 100)
+    client:SetArmor(self.armor or 0)
+
+    -- Give weapons
+    for _, weapon in ipairs(self.weapons or {}) do
+        client:Give(weapon)
+    end
+
+    -- Give items
+    local inventory = client:GetCharacter():GetInventory()
+    for _, itemID in ipairs(self.items or {}) do
+        inventory:Add(itemID)
+    end
+
+    -- Set movement
+    if self.runSpeed then
+        client:SetRunSpeed(self.runSpeed)
+    end
+
+    -- Take payment if applicable
+    if self.joinCost and self.joinCost > 0 then
+        client:GetCharacter():TakeMoney(self.joinCost)
+    end
+
+    -- Set class data
+    client:GetCharacter():SetData("joinedClass", CurTime())
+
+    -- Notify
+    client:ChatPrint("You are now a " .. self.name)
+end
+```
+
+### OnRemoved
+
+Called when player leaves this class:
+
+```lua
+function CLASS:OnRemoved(client)
+    -- Remove weapons
+    for _, weapon in ipairs(self.weapons or {}) do
+        client:StripWeapon(weapon)
+    end
+
+    -- Reset stats
+    client:SetHealth(100)
+    client:SetArmor(0)
+
+    -- Reset speeds
+    client:SetRunSpeed(240)
+    client:SetWalkSpeed(100)
+
+    -- Clear class data
+    client:GetCharacter():SetData("joinedClass", nil)
+
+    -- Notify
+    client:ChatPrint("You left " .. self.name)
+end
+```
+
+### OnThink
+
+Called every tick for players in this class:
+
+```lua
+function CLASS:OnThink(client)
     local character = client:GetCharacter()
     if not character then return end
 
-    local classIndex = character:GetClass()
-    if not classIndex then return end
-
-    local class = ix.class.Get(classIndex)
-
-    -- Squad Leader ability
-    if class.uniqueID == "squad_leader" and key == IN_RELOAD then
-        -- Rally nearby allies
-        for _, ply in ipairs(ents.FindInSphere(client:GetPos(), 500)) do
-            if ply:IsPlayer() and ply:GetCharacter() then
-                if ply:GetCharacter():GetFaction() == character:GetFaction() then
-                    ply:SetHealth(math.min(ply:Health() + 25, ply:GetMaxHealth()))
-                end
-            end
+    -- Example: Passive effects
+    if self.uniqueID == "medic" then
+        -- Health regeneration
+        if client:Health() < client:GetMaxHealth() then
+            client:SetHealth(math.min(client:Health() + 0.05, client:GetMaxHealth()))
         end
+    end
 
-        client:ChatPrint("Rallied nearby allies!")
+    -- Example: Resource gathering
+    if self.uniqueID == "miner" then
+        local miningPower = character:GetData("miningPower", 0)
+        if miningPower > 0 then
+            character:SetData("miningPower", miningPower - 0.01)
+        end
     end
 end
 ```
 
-### Automatic Class Assignment
+## Advanced Class Features
+
+### Paid Classes
 
 ```lua
--- In faction file
-function FACTION:OnCharacterCreated(client, character)
-    -- Auto-assign to recruit class
-    timer.Simple(1, function()
-        if IsValid(client) and character then
-            local recruitClass = ix.class.Get("police_recruit")
-            if recruitClass then
-                character:JoinClass(recruitClass.index)
+CLASS.joinCost = 500
+
+function CLASS:CanSwitchTo(client)
+    local character = client:GetCharacter()
+
+    if not character:HasMoney(self.joinCost) then
+        return false, "This class costs $" .. self.joinCost
+    end
+
+    return true
+end
+
+function CLASS:OnSet(client)
+    -- Take money when joining
+    client:GetCharacter():TakeMoney(self.joinCost)
+end
+```
+
+### Time-Limited Classes
+
+```lua
+function CLASS:OnSet(client)
+    -- Auto-remove after 30 minutes
+    timer.Create("ClassDuration_" .. client:SteamID(), 1800, 1, function()
+        if IsValid(client) then
+            local character = client:GetCharacter()
+            if character and character:GetClass() == self.index then
+                character:KickClass()
+                client:Notify("Your " .. self.name .. " shift has ended")
             end
         end
     end)
 end
+
+function CLASS:OnRemoved(client)
+    timer.Remove("ClassDuration_" .. client:SteamID())
+end
 ```
 
-## Common Issues
+### Rank-Based Classes
 
-### Class not appearing
+```lua
+-- File: schema/classes/sh_lieutenant.lua
+CLASS.name = "Lieutenant"
+CLASS.faction = FACTION_POLICE
+CLASS.requiredRank = 4
 
-**Cause**: File not in `schema/classes/` or wrong naming
-**Fix**: Place in `schema/classes/sh_name.lua`
+function CLASS:CanSwitchTo(client)
+    local rank = client:GetCharacter():GetData("rank", 0)
+    if rank < self.requiredRank then
+        return false, "You need rank " .. self.requiredRank
+    end
+    return true
+end
+```
 
-### Cannot join class
+## Best Practices
 
-**Cause**: Wrong faction or limit reached
-**Fix**: Verify CLASS.faction matches character's faction
+### ✅ DO
 
-### Class index is nil
+- Create one class file per class in `schema/classes/`
+- Use `sh_` prefix for automatic loading
+- Always set CLASS.name and CLASS.faction
+- Store CLASS.index in global (e.g., `CLASS_CHIEF`)
+- Use limits for leadership/special roles
+- Implement CanSwitchTo for requirements
+- Clean up in OnRemoved
+- Provide clear descriptions
+- Balance class equipment
+- Test class limits with multiple players
 
-**Cause**: Accessing CLASS.index too early
-**Fix**: Access after schema loads or use class getter
+### ❌ DON'T
 
-### OnRemoved not called
+- Don't create classes without valid faction
+- Don't forget to set player limits on special classes
+- Don't implement custom class systems
+- Don't modify character faction from class
+- Don't forget to remove weapons in OnRemoved
+- Don't allow unlimited special classes
+- Don't bypass CanSwitchTo checks
+- Don't forget cleanup timers in OnRemoved
 
-**Cause**: Player disconnected or class code error
-**Fix**: Always handle edge cases in OnRemoved
+## Common Patterns
+
+### Auto-Promotion System
+
+```lua
+-- File: schema/sv_schema.lua
+hook.Add("PlayerDeath", "ClassAutoKick", function(victim)
+    local character = victim:GetCharacter()
+    if character and character:GetClass() then
+        -- Remove from class on death
+        character:KickClass()
+    end
+end)
+```
+
+### Class-Specific Commands
+
+```lua
+ix.command.Add("ClassAbility", {
+    description = "Use your class ability",
+    OnRun = function(self, client)
+        local character = client:GetCharacter()
+        local classIndex = character:GetClass()
+
+        if not classIndex then
+            return "You don't have a class"
+        end
+
+        local class = ix.class.Get(classIndex)
+
+        if class.uniqueID == "medic" then
+            -- Medic heal ability
+            return "Healing nearby players..."
+        elseif class.uniqueID == "engineer" then
+            -- Engineer build ability
+            return "Opening build menu..."
+        end
+    end
+})
+```
+
+### Class Whiteboard
+
+```lua
+-- Show all players in each class
+ix.command.Add("ClassList", {
+    description = "Show all active classes",
+    OnRun = function(self, client)
+        for classIndex, class in ipairs(ix.class.list) do
+            local players = ix.class.GetPlayers(classIndex)
+            if #players > 0 then
+                client:ChatPrint(class.name .. " (" .. #players .. "/" .. (class.limit == 0 and "∞" or class.limit) .. "):")
+                for _, ply in ipairs(players) do
+                    client:ChatPrint("  - " .. ply:Name())
+                end
+            end
+        end
+    end
+})
+```
 
 ## See Also
 
-- [Class System](../systems/classes.md) - Detailed class system reference
-- [Faction System](../systems/factions.md) - Faction management
-- [Schema Factions](factions.md) - Creating factions
-- [Command System](../systems/commands.md) - Class commands
+- [Class System](../systems/classes.md) - Core class system reference
+- [Factions](factions.md) - Creating factions for your schema
+- [Commands](commands.md) - Creating class join commands
+- [Schema Structure](structure.md) - Schema directory layout
 - Source: `gamemode/core/libs/sh_class.lua`

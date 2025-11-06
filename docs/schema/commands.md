@@ -1,354 +1,334 @@
-# Creating Schema Commands
+# Creating Commands for Your Schema
 
 > **Reference**: `gamemode/core/libs/sh_command.lua`, `schema/commands/`
 
-Commands are chat-based actions players can execute. This guide shows how to create commands specifically for your schema.
+This guide shows you how to create custom chat commands for your schema. Commands allow players to interact with your schema's features through chat.
 
 ## ⚠️ Important: Use Helix Command System
 
 **Always use `ix.command.Add()`** rather than creating custom command parsers. The framework provides:
 - Automatic argument type validation
-- Permission checking
-- Help text generation
-- Tab completion
-- Command aliasing
+- Permission checking (admin, flags, custom)
+- Auto-generated help system
+- Tab completion for player names
+- Alias support
+- Consistent command format
 
 ## Core Concepts
 
-### What are Schema Commands?
+### Commands in Your Schema
 
-Schema commands are roleplay-specific actions:
-- **/request** - Request items from CPs (HL2RP)
-- **/radio** - Send message on radio frequency
-- **/me** - Perform an action (usually provided by framework)
-- **/roll** - Roll dice for chance events
-- **/givepermit** - Issue work permits (HL2RP)
+Commands are actions players can perform by typing in chat:
 
-Commands enhance roleplay by:
-- Providing structure to common actions
-- Validating permissions automatically
-- Creating consistent interactions
+```
+/roll 100          - Roll a die
+/me waves hello    - Roleplay action
+/give player item  - Give items
+/broadcast message - Announce to server
+```
 
-## Creating Commands
+Command prefixes:
+- `/command` - Standard command
+- `!command` - Alternative prefix (same as /)
+- `@command` - Silent command (no chat output)
 
 ### File Location
 
-**Place command files** in:
+Create commands in:
 ```
-schema/commands/sh_commands.lua
-```
-
-Or organize by purpose:
-```
-schema/commands/
-├── sh_commands.lua      -- General commands
-├── sh_admin.lua         -- Admin commands
-└── sh_roleplay.lua      -- RP commands
+schema/commands/sh_commandname.lua
 ```
 
-### Basic Command Template
+Or in your plugin:
+```
+plugins/myplugin/commands/sh_commandname.lua
+```
+
+## Creating Your First Command
+
+### Simple Command
 
 ```lua
--- schema/commands/sh_commands.lua
-ix.command.Add("Request", {
-    description = "Request supplies from Civil Protection",
-    OnRun = function(self, client)
-        local character = client:GetCharacter()
-
-        if character:GetFaction() != FACTION_CITIZEN then
-            return "Only citizens can request supplies"
-        end
-
-        -- Find nearby CP
-        local nearbyCP
-        for _, ply in ipairs(player.GetAll()) do
-            if ply:GetCharacter() and ply:GetCharacter():GetFaction() == FACTION_CP then
-                if ply:GetPos():Distance(client:GetPos()) <= 300 then
-                    nearbyCP = ply
-                    break
-                end
-            end
-        end
-
-        if not nearbyCP then
-            return "No Civil Protection nearby"
-        end
-
-        -- Notify CP
-        nearbyCP:ChatPrint(client:Name() .. " is requesting supplies")
-        client:ChatPrint("You requested supplies from " .. nearbyCP:Name())
-    end
-})
-```
-
-**⚠️ Do NOT**:
-```lua
--- WRONG: Don't create custom chat parsers
-hook.Add("PlayerSay", "CustomCommands", function(ply, text)
-    if string.sub(text, 1, 1) == "/" then
-        -- Don't do this!
-    end
-end)
-```
-
-## Required Command Properties
-
-### Minimal Requirements
-
-```lua
-ix.command.Add("CommandName", {
-    description = "What the command does",    -- REQUIRED
-    OnRun = function(self, client)            -- REQUIRED
-        -- Command logic
-        return "Result message"
-    end
-})
-```
-
-## Common Command Examples
-
-### Request Command (HL2RP)
-
-```lua
-ix.command.Add("Request", {
-    description = "Request items from nearby Civil Protection",
-    arguments = {ix.type.text},  -- Item request text
-    OnRun = function(self, client, text)
-        local character = client:GetCharacter()
-
-        -- Only citizens can request
-        if character:GetFaction() != FACTION_CITIZEN then
-            return "Only citizens can make requests"
-        end
-
-        -- Check cooldown
-        local lastRequest = character:GetData("lastRequest", 0)
-        if CurTime() - lastRequest < 60 then
-            return "You must wait before making another request"
-        end
-
-        -- Find nearby CP
-        local nearbyCP
-        for _, ply in ipairs(player.GetAll()) do
-            local plyChr = ply:GetCharacter()
-            if plyChr and plyChr:GetFaction() == FACTION_CP then
-                if ply:GetPos():Distance(client:GetPos()) <= 300 then
-                    nearbyCP = ply
-                    break
-                end
-            end
-        end
-
-        if not nearbyCP then
-            return "No Civil Protection nearby"
-        end
-
-        -- Set cooldown
-        character:SetData("lastRequest", CurTime())
-
-        -- Notify CP and nearby players
-        ix.chat.Send(client, "request", text)
-
-        return false  -- Don't show return message
-    end
-})
-```
-
-### Roll Command
-
-```lua
+-- File: schema/commands/sh_roll.lua
 ix.command.Add("Roll", {
-    description = "Roll a random number",
+    description = "Roll a die",
     arguments = {
         bit.bor(ix.type.number, ix.type.optional)  -- Optional max number
     },
     OnRun = function(self, client, maxNumber)
         maxNumber = maxNumber or 100
 
-        if maxNumber < 1 or maxNumber > 1000 then
-            return "Number must be between 1 and 1000"
+        if SERVER then
+            local result = math.random(1, maxNumber)
+            local name = client:GetCharacter():GetName()
+
+            -- Announce to nearby players
+            local message = name .. " rolled " .. result .. " out of " .. maxNumber
+            ix.chat.Send(client, "roll", message)
         end
-
-        local roll = math.random(1, maxNumber)
-
-        -- Announce to nearby players
-        for _, ply in ipairs(player.GetAll()) do
-            if ply:GetPos():Distance(client:GetPos()) <= 500 then
-                ply:ChatPrint(client:Name() .. " rolls " .. roll .. " out of " .. maxNumber)
-            end
-        end
-
-        return false  -- Message already sent
     end
 })
 ```
 
-### Radio Command
-
-```lua
-ix.command.Add("Radio", {
-    description = "Send message on your radio frequency",
-    arguments = {ix.type.text},
-    OnRun = function(self, client, message)
-        local character = client:GetCharacter()
-        local inventory = character:GetInventory()
-
-        -- Check if player has radio
-        local hasRadio = false
-        local radioFreq = "100.0"
-
-        for _, item in pairs(inventory:GetItems()) do
-            if item.uniqueID == "handheld_radio" then
-                if item:GetData("enabled", false) then
-                    hasRadio = true
-                    radioFreq = item:GetData("frequency", "100.0")
-                    break
-                end
-            end
-        end
-
-        if not hasRadio then
-            return "You don't have an active radio"
-        end
-
-        -- Send to players on same frequency
-        for _, ply in ipairs(player.GetAll()) do
-            local plyChr = ply:GetCharacter()
-            if not plyChr then continue end
-
-            local plyInv = plyChr:GetInventory()
-            for _, item in pairs(plyInv:GetItems()) do
-                if item.uniqueID == "handheld_radio" then
-                    if item:GetData("enabled", false) and item:GetData("frequency") == radioFreq then
-                        ply:ChatPrint("[RADIO " .. radioFreq .. "] " .. client:Name() .. ": " .. message)
-                    end
-                end
-            end
-        end
-
-        return false  -- Message sent via chat
-    end
-})
+Usage:
+```
+/roll       - Rolls 1-100
+/roll 20    - Rolls 1-20
 ```
 
-### Give Permit (Admin)
+### Command with Arguments
 
 ```lua
-ix.command.Add("GivePermit", {
-    description = "Issue a work permit to a citizen",
-    adminOnly = true,
+-- File: schema/commands/sh_give.lua
+ix.command.Add("Give", {
+    description = "Give money to another player",
     arguments = {
-        ix.type.player,   -- Target player
-        ix.type.string    -- Permit type
+        ix.type.player,  -- Target player
+        ix.type.number   -- Amount
     },
-    OnRun = function(self, client, target, permitType)
-        local character = target:GetCharacter()
+    OnRun = function(self, client, target, amount)
+        local character = client:GetCharacter()
+        local targetChar = target:GetCharacter()
 
-        if not character then
-            return "Target has no character"
+        -- Validation
+        if not targetChar then
+            return "Target has no active character"
         end
 
-        if character:GetFaction() != FACTION_CITIZEN then
-            return "Target must be a citizen"
+        if amount <= 0 then
+            return "Amount must be positive"
         end
 
-        local validPermits = {
-            "work", "travel", "medical", "ration"
-        }
-
-        if not table.HasValue(validPermits, permitType) then
-            return "Invalid permit type. Valid: " .. table.concat(validPermits, ", ")
+        if not character:HasMoney(amount) then
+            return "You don't have enough money"
         end
 
-        -- Give permit item
-        local inventory = character:GetInventory()
-        inventory:Add("permit_" .. permitType)
+        if client:GetPos():Distance(target:GetPos()) > 150 then
+            return "You are too far away"
+        end
 
-        -- Log action
-        ix.log.Add(client, "givePermit", permitType, target)
+        -- Transfer money
+        if SERVER then
+            character:TakeMoney(amount)
+            targetChar:GiveMoney(amount)
 
-        return "Gave " .. permitType .. " permit to " .. target:Name()
+            client:Notify("You gave $" .. amount .. " to " .. target:Name())
+            target:Notify(client:Name() .. " gave you $" .. amount)
+        end
     end
 })
 ```
 
-### Check Inventory Command
+Usage:
+```
+/give "John Doe" 100
+```
+
+## Command Structure
+
+### Required Fields
 
 ```lua
-ix.command.Add("CheckInv", {
-    description = "Check a player's inventory",
-    adminOnly = true,
-    arguments = {ix.type.player},
-    OnRun = function(self, client, target)
-        local character = target:GetCharacter()
-
-        if not character then
-            return "Target has no character"
-        end
-
-        local inventory = character:GetInventory()
-        local items = inventory:GetItems()
-
-        client:ChatPrint("=== " .. target:Name() .. "'s Inventory ===")
-
-        for _, item in pairs(items) do
-            client:ChatPrint("- " .. item.name .. " (x" .. (item:GetData("amount", 1)) .. ")")
-        end
-
-        client:ChatPrint("Money: " .. ix.currency.Get(character:GetMoney()))
-
-        return false
+ix.command.Add("CommandName", {
+    description = "What this command does",  -- REQUIRED
+    OnRun = function(self, client, ...args)  -- REQUIRED
+        -- Command logic
+        return "Feedback message"
     end
 })
 ```
 
-## Command Arguments
-
-### Argument Types
+### Optional Fields
 
 ```lua
-ix.type.string      -- Single word
-ix.type.text        -- Rest of text
-ix.type.number      -- Any number
-ix.type.player      -- Player name
-ix.type.character   -- Character name
-ix.type.bool        -- true/false
+ix.command.Add("CommandName", {
+    description = "Description",
+    adminOnly = false,           -- Only admins
+    superAdminOnly = false,      -- Only superadmins
+    privilege = "Permission",    -- CAMI privilege
+    arguments = {},              -- Argument types
+    alias = {"cmd", "alt"},      -- Alternative names
+    syntax = "<arg1> [arg2]",    -- Help text
+
+    OnCheckAccess = function(self, client)
+        -- Custom permission check
+        return client:IsUserGroup("moderator")
+    end,
+
+    OnRun = function(self, client, ...args)
+        -- Command logic
+        return "Result"
+    end
+})
 ```
 
-### Optional Arguments
+## Complete Command Examples
+
+### Roleplay Action (/me)
 
 ```lua
-arguments = {
-    ix.type.player,                                -- Required
-    bit.bor(ix.type.number, ix.type.optional)      -- Optional
-}
+-- File: schema/commands/sh_me.lua
+ix.command.Add("Me", {
+    description = "Perform a roleplay action",
+    arguments = {ix.type.text},  -- All remaining text
+    OnRun = function(self, client, action)
+        if SERVER then
+            local name = client:GetCharacter():GetName()
+            local message = "** " .. name .. " " .. action
+
+            -- Send to nearby players
+            ix.chat.Send(client, "me", action)
+        end
+    end
+})
 ```
 
-### Multiple Arguments Example
+### Item Giving Command
 
 ```lua
+-- File: schema/commands/sh_giveitem.lua
 ix.command.Add("GiveItem", {
-    description = "Give item to player",
+    description = "Give an item to a player",
     adminOnly = true,
     arguments = {
-        ix.type.player,   -- Who to give to
-        ix.type.string,   -- Item uniqueID
-        ix.type.number    -- Quantity
+        ix.type.player,  -- Target player
+        ix.type.string,  -- Item unique ID
+        bit.bor(ix.type.number, ix.type.optional)  -- Optional quantity
     },
     OnRun = function(self, client, target, itemID, quantity)
+        quantity = quantity or 1
+
+        local targetChar = target:GetCharacter()
+        if not targetChar then
+            return "Target has no character"
+        end
+
+        local itemTable = ix.item.list[itemID]
+        if not itemTable then
+            return "Invalid item ID: " .. itemID
+        end
+
+        if SERVER then
+            local inventory = targetChar:GetInventory()
+
+            for i = 1, quantity do
+                inventory:Add(itemID)
+            end
+
+            return "Gave " .. quantity .. "x " .. itemTable.name .. " to " .. target:Name()
+        end
+    end
+})
+```
+
+### Faction Management Command
+
+```lua
+-- File: schema/commands/sh_charsetfaction.lua
+ix.command.Add("CharSetFaction", {
+    description = "Change a character's faction",
+    adminOnly = true,
+    arguments = {
+        ix.type.player,  -- Target player
+        ix.type.string   -- Faction unique ID
+    },
+    OnRun = function(self, client, target, factionID)
+        local character = target:GetCharacter()
+
+        if not character then
+            return "Target has no active character"
+        end
+
+        local faction = ix.faction.teams[factionID]
+        if not faction then
+            return "Invalid faction ID: " .. factionID
+        end
+
+        if SERVER then
+            character:SetFaction(faction.index)
+
+            -- Update model
+            local models = faction:GetModels(target)
+            if models and #models > 0 then
+                character:SetModel(models[1])
+                target:SetModel(models[1])
+            end
+
+            target:Notify("Your faction has been changed to " .. faction.name)
+            return "Changed " .. target:Name() .. "'s faction to " .. faction.name
+        end
+    end
+})
+```
+
+### Broadcast Command
+
+```lua
+-- File: schema/commands/sh_broadcast.lua
+ix.command.Add("Broadcast", {
+    description = "Send a server-wide announcement",
+    adminOnly = true,
+    arguments = {ix.type.text},
+    OnRun = function(self, client, message)
+        if SERVER then
+            for _, ply in ipairs(player.GetAll()) do
+                ply:ChatPrint("[BROADCAST] " .. message)
+                ply:EmitSound("buttons/button17.wav")
+            end
+
+            ix.log.Add(client, "broadcast", message)
+        end
+    end
+})
+```
+
+### Flag Management Command
+
+```lua
+-- File: schema/commands/sh_flaggive.lua
+ix.command.Add("FlagGive", {
+    description = "Give a flag to a character",
+    adminOnly = true,
+    arguments = {
+        ix.type.player,
+        ix.type.string  -- Flag(s)
+    },
+    OnRun = function(self, client, target, flags)
         local character = target:GetCharacter()
 
         if not character then
             return "Target has no character"
         end
 
-        local inventory = character:GetInventory()
+        if SERVER then
+            character:GiveFlags(flags)
 
-        for i = 1, quantity do
-            inventory:Add(itemID)
+            target:Notify("You have been given flags: " .. flags)
+            return "Gave flags '" .. flags .. "' to " .. target:Name()
+        end
+    end
+})
+
+ix.command.Add("FlagTake", {
+    description = "Remove a flag from a character",
+    adminOnly = true,
+    arguments = {
+        ix.type.player,
+        ix.type.string
+    },
+    OnRun = function(self, client, target, flags)
+        local character = target:GetCharacter()
+
+        if not character then
+            return "Target has no character"
         end
 
-        return "Gave " .. quantity .. "x " .. itemID .. " to " .. target:Name()
+        if SERVER then
+            character:TakeFlags(flags)
+
+            target:Notify("Your flags have been removed: " .. flags)
+            return "Removed flags '" .. flags .. "' from " .. target:Name()
+        end
     end
 })
 ```
@@ -359,25 +339,10 @@ ix.command.Add("GiveItem", {
 
 ```lua
 ix.command.Add("AdminCommand", {
-    description = "Admin only command",
-    adminOnly = true,
+    description = "Admin-only command",
+    adminOnly = true,  -- Requires client:IsAdmin()
     OnRun = function(self, client)
         return "Admin command executed"
-    end
-})
-```
-
-### Custom Permission Check
-
-```lua
-ix.command.Add("CPCommand", {
-    description = "Civil Protection only command",
-    OnCheckAccess = function(self, client)
-        local character = client:GetCharacter()
-        return character and character:GetFaction() == FACTION_CP
-    end,
-    OnRun = function(self, client)
-        return "CP command executed"
     end
 })
 ```
@@ -385,187 +350,136 @@ ix.command.Add("CPCommand", {
 ### Flag-Based Permission
 
 ```lua
-ix.command.Add("VendorCommand", {
-    description = "Vendor flag required",
+ix.command.Add("VendorMenu", {
+    description = "Open vendor menu",
     OnCheckAccess = function(self, client)
         local character = client:GetCharacter()
+        -- Require 'v' flag
         return character and character:HasFlags("v")
     end,
     OnRun = function(self, client)
-        return "Vendor command executed"
+        -- Open vendor UI
+        if SERVER then
+            net.Start("OpenVendorMenu")
+            net.Send(client)
+        end
     end
 })
 ```
 
-## Schema-Specific Patterns
-
-### Proximity-Based Commands
+### Custom Permission Logic
 
 ```lua
-ix.command.Add("Search", {
-    description = "Search a nearby player",
-    arguments = {ix.type.player},
+ix.command.Add("ModeratorKick", {
+    description = "Kick a player (moderator+)",
     OnCheckAccess = function(self, client)
-        local character = client:GetCharacter()
-        return character and character:GetFaction() == FACTION_CP
+        -- Allow moderators and admins
+        return client:IsUserGroup("moderator") or
+               client:IsUserGroup("admin") or
+               client:IsSuperAdmin()
     end,
+    arguments = {
+        ix.type.player,
+        ix.type.text  -- Reason
+    },
+    OnRun = function(self, client, target, reason)
+        target:Kick(reason)
+        return "Kicked " .. target:Name() .. ": " .. reason
+    end
+})
+```
+
+## Argument Types
+
+### Available Types
+
+```lua
+ix.type.string      -- Single word
+ix.type.text        -- Rest of text (all remaining)
+ix.type.number      -- Number (int or decimal)
+ix.type.player      -- Player with autocomplete
+ix.type.character   -- Character name
+ix.type.steamid     -- Steam ID
+ix.type.bool        -- Boolean (true/false/1/0/yes/no)
+
+-- Modifiers
+ix.type.optional    -- Makes argument optional
+```
+
+### Using Argument Types
+
+```lua
+ix.command.Add("Teleport", {
+    description = "Teleport to a player",
+    arguments = {
+        ix.type.player  -- Required player argument
+    },
     OnRun = function(self, client, target)
-        -- Check distance
-        if client:GetPos():Distance(target:GetPos()) > 150 then
-            return "Target too far away"
-        end
+        client:SetPos(target:GetPos())
+        return "Teleported to " .. target:Name()
+    end
+})
 
-        -- Check if target is restrained
-        local targetChar = target:GetCharacter()
-        if not targetChar:GetData("tied") then
-            return "Target must be restrained first"
-        end
+ix.command.Add("SetHealth", {
+    description = "Set your health",
+    arguments = {
+        ix.type.number  -- Required number argument
+    },
+    OnRun = function(self, client, health)
+        health = math.Clamp(health, 1, client:GetMaxHealth())
+        client:SetHealth(health)
+        return "Health set to " .. health
+    end
+})
 
-        -- Show inventory
-        local inventory = targetChar:GetInventory()
-        client:ChatPrint("=== Searching " .. target:Name() .. " ===")
-
-        for _, item in pairs(inventory:GetItems()) do
-            client:ChatPrint("- " .. item.name)
-        end
-
-        -- Notify target
-        target:ChatPrint(client:Name() .. " is searching you")
-
-        return false
+ix.command.Add("Note", {
+    description = "Leave a note",
+    arguments = {
+        ix.type.text  -- Captures all remaining text
+    },
+    OnRun = function(self, client, noteText)
+        client:GetCharacter():SetData("lastNote", noteText)
+        return "Note saved: " .. noteText
     end
 })
 ```
 
-### Cooldown System
+### Optional Arguments
 
 ```lua
-PLUGIN.commandCooldowns = PLUGIN.commandCooldowns or {}
+ix.command.Add("Pay", {
+    description = "Pay money to a player or yourself",
+    arguments = {
+        bit.bor(ix.type.player, ix.type.optional),  -- Optional target
+        ix.type.number  -- Amount
+    },
+    OnRun = function(self, client, target, amount)
+        -- If no target specified, defaults to self
+        target = target or client
 
-ix.command.Add("Broadcast", {
-    description = "Broadcast a message (5 min cooldown)",
-    arguments = {ix.type.text},
-    OnRun = function(self, client, message)
-        local steamID = client:SteamID()
-        local cooldown = PLUGIN.commandCooldowns[steamID] or 0
-
-        if CurTime() < cooldown then
-            local remaining = math.ceil(cooldown - CurTime())
-            return "Must wait " .. remaining .. " seconds"
-        end
-
-        -- Set cooldown (5 minutes)
-        PLUGIN.commandCooldowns[steamID] = CurTime() + 300
-
-        -- Broadcast
-        for _, ply in ipairs(player.GetAll()) do
-            ply:ChatPrint("[BROADCAST] " .. message)
-        end
-
-        return false
-    end
-})
-```
-
-### Context-Sensitive Commands
-
-```lua
-ix.command.Add("Lockdown", {
-    description = "Initiate city lockdown",
-    OnCheckAccess = function(self, client)
         local character = client:GetCharacter()
-        if not character then return false end
+        local targetChar = target:GetCharacter()
 
-        -- Must be CP with rank 5+
-        if character:GetFaction() != FACTION_CP then
-            return false
+        if not character:HasMoney(amount) then
+            return "Not enough money"
         end
 
-        if character:GetData("rank", 0) < 5 then
-            return false
-        end
+        character:TakeMoney(amount)
+        targetChar:GiveMoney(amount)
 
-        return true
-    end,
-    OnRun = function(self, client)
-        -- Check if already in lockdown
-        if Schema.lockdownActive then
-            return "Lockdown already active"
-        end
-
-        Schema.lockdownActive = true
-
-        -- Notify all players
-        for _, ply in ipairs(player.GetAll()) do
-            ply:ChatPrint("[COMBINE OVERWATCH] City lockdown initiated")
-            ply:EmitSound("npc/overwatch/cityvoice/f_lockdownterminated_spkr.wav")
-        end
-
-        -- Lock all doors
-        for _, door in ipairs(ents.FindByClass("prop_door*")) do
-            door:Fire("lock")
-        end
-
-        -- Log action
-        ix.log.Add(client, "lockdown", "initiated")
-
-        return false
+        return "Paid $" .. amount .. " to " .. target:Name()
     end
 })
 ```
 
 ## Advanced Features
 
-### Multi-Step Commands
-
-```lua
-PLUGIN.pendingTransfers = PLUGIN.pendingTransfers or {}
-
-ix.command.Add("Transfer", {
-    description = "Transfer character to another player",
-    adminOnly = true,
-    arguments = {
-        ix.type.character,
-        ix.type.player
-    },
-    OnRun = function(self, client, character, target)
-        local charID = character:GetID()
-
-        -- First confirmation
-        if not PLUGIN.pendingTransfers[charID] then
-            PLUGIN.pendingTransfers[charID] = {
-                target = target,
-                admin = client
-            }
-
-            timer.Simple(10, function()
-                PLUGIN.pendingTransfers[charID] = nil
-            end)
-
-            return "Type command again to confirm transfer of '" .. character:GetName() .. "' to " .. target:Name()
-        end
-
-        -- Confirmed
-        PLUGIN.pendingTransfers[charID] = nil
-
-        -- Do transfer
-        character:SetOwner(target:SteamID64())
-        character:Save()
-
-        ix.log.Add(client, "transferChar", character:GetName(), target)
-
-        return "Transferred character to " .. target:Name()
-    end
-})
-```
-
 ### Command Aliases
 
 ```lua
 ix.command.Add("Teleport", {
     description = "Teleport to a player",
-    alias = {"tp", "goto"},
-    adminOnly = true,
+    alias = {"tp", "goto", "bring"},  -- Alternative names
     arguments = {ix.type.player},
     OnRun = function(self, client, target)
         client:SetPos(target:GetPos() + Vector(0, 0, 10))
@@ -573,89 +487,212 @@ ix.command.Add("Teleport", {
     end
 })
 
--- All work: /teleport, /tp, /goto
+-- All these work:
+-- /teleport "John"
+-- /tp "John"
+-- /goto "John"
+-- /bring "John"
+```
+
+### Context-Aware Commands
+
+```lua
+ix.command.Add("Unlock", {
+    description = "Unlock the door you're looking at",
+    OnRun = function(self, client)
+        local trace = client:GetEyeTrace()
+        local door = trace.Entity
+
+        if not IsValid(door) or not door:IsDoor() then
+            return "You must look at a door"
+        end
+
+        if trace.HitPos:Distance(client:GetPos()) > 100 then
+            return "Door is too far away"
+        end
+
+        if SERVER then
+            door:Fire("unlock")
+            door:EmitSound("doors/door_latch3.wav")
+        end
+
+        return "Door unlocked"
+    end
+})
+```
+
+### Cooldown System
+
+```lua
+-- In schema/sv_schema.lua
+Schema.commandCooldowns = Schema.commandCooldowns or {}
+
+ix.command.Add("Heal", {
+    description = "Heal yourself (5 minute cooldown)",
+    OnRun = function(self, client)
+        local steamID = client:SteamID()
+        local cooldown = Schema.commandCooldowns[steamID] or 0
+
+        if CurTime() < cooldown then
+            local remaining = math.ceil(cooldown - CurTime())
+            return "You must wait " .. remaining .. " seconds"
+        end
+
+        if SERVER then
+            client:SetHealth(client:GetMaxHealth())
+            Schema.commandCooldowns[steamID] = CurTime() + 300  -- 5 minutes
+
+            timer.Simple(300, function()
+                if IsValid(client) then
+                    client:Notify("Heal command is ready")
+                end
+            end)
+        end
+
+        return "You have been healed"
+    end
+})
+```
+
+### Confirmation Prompts
+
+```lua
+ix.command.Add("ClearInventory", {
+    description = "Clear your entire inventory (DESTRUCTIVE)",
+    OnRun = function(self, client)
+        local steamID = client:SteamID()
+        Schema.confirmations = Schema.confirmations or {}
+
+        if Schema.confirmations[steamID] then
+            -- Confirmed, do action
+            Schema.confirmations[steamID] = nil
+
+            if SERVER then
+                local inventory = client:GetCharacter():GetInventory()
+                for _, item in pairs(inventory:GetItems()) do
+                    item:Remove()
+                end
+            end
+
+            return "Inventory cleared"
+        else
+            -- Need confirmation
+            Schema.confirmations[steamID] = true
+
+            timer.Simple(10, function()
+                Schema.confirmations[steamID] = nil
+            end)
+
+            return "Type /clearinventory again to confirm (10 seconds)"
+        end
+    end
+})
 ```
 
 ## Best Practices
 
 ### ✅ DO
 
-- Place commands in `schema/commands/` folder
-- Use `ix.command.Add()` for all commands
-- Set clear, descriptive descriptions
-- Validate all input in OnRun
-- Check permissions with OnCheckAccess
-- Return helpful error messages
+- Create commands in `schema/commands/` or `plugins/*/commands/`
+- Use `sh_` prefix for automatic loading
+- Always set description
+- Validate all arguments on SERVER
 - Use appropriate argument types
-- Log important admin actions with ix.log.Add()
-- Test edge cases (nil values, disconnects)
+- Return meaningful feedback messages
+- Check permissions properly
+- Use OnCheckAccess for custom permissions
+- Test commands with different argument combinations
+- Provide helpful error messages
 
 ### ❌ DON'T
 
-- Don't create custom chat command parsers
-- Don't forget permission checks
-- Don't trust client-provided data
-- Don't forget to validate arguments
-- Don't skip error messages
-- Don't create commands without descriptions
 - Don't bypass the command system
+- Don't trust client data without validation
+- Don't forget SERVER checks for important logic
+- Don't create commands without descriptions
+- Don't forget to return a value in OnRun
+- Don't use wrong argument types
+- Don't allow exploits through poor validation
+- Don't forget distance checks for interaction commands
 
 ## Common Patterns
 
-### Admin Command Template
+### Nearby Player Effect
 
 ```lua
-ix.command.Add("AdminAction", {
-    description = "Perform admin action",
+ix.command.Add("AoEHeal", {
+    description = "Heal nearby players",
+    OnRun = function(self, client)
+        if SERVER then
+            local count = 0
+            local pos = client:GetPos()
+
+            for _, ply in ipairs(player.GetAll()) do
+                if ply:GetPos():Distance(pos) <= 300 then
+                    ply:SetHealth(ply:GetMaxHealth())
+                    count = count + 1
+                end
+            end
+
+            return "Healed " .. count .. " nearby players"
+        end
+    end
+})
+```
+
+### Data Modification
+
+```lua
+ix.command.Add("SetRank", {
+    description = "Set your character's rank",
+    arguments = {ix.type.number},
+    OnRun = function(self, client, rank)
+        rank = math.Clamp(rank, 1, 10)
+
+        if SERVER then
+            client:GetCharacter():SetData("rank", rank)
+        end
+
+        return "Rank set to " .. rank
+    end
+})
+```
+
+### Entity Spawning
+
+```lua
+ix.command.Add("SpawnProp", {
+    description = "Spawn a prop",
     adminOnly = true,
-    arguments = {ix.type.player, ix.type.string},
-    OnRun = function(self, client, target, reason)
-        -- Validate target
-        if not IsValid(target) then
-            return "Invalid target"
+    arguments = {ix.type.string},  -- Model path
+    OnRun = function(self, client, model)
+        if SERVER then
+            local trace = client:GetEyeTrace()
+
+            local prop = ents.Create("prop_physics")
+            prop:SetModel(model)
+            prop:SetPos(trace.HitPos + Vector(0, 0, 10))
+            prop:Spawn()
+
+            return "Spawned " .. model
         end
-
-        -- Perform action
-        -- ... do something ...
-
-        -- Log it
-        ix.log.Add(client, "adminAction", target, reason)
-
-        return "Action completed on " .. target:Name()
     end
 })
 ```
 
-### Roleplay Command Template
+## Testing Commands
 
-```lua
-ix.command.Add("RPAction", {
-    description = "Perform RP action",
-    arguments = {ix.type.text},
-    OnRun = function(self, client, text)
-        local character = client:GetCharacter()
-
-        -- Check faction/class permissions
-        if not self:CheckPermissions(character) then
-            return "You cannot do this"
-        end
-
-        -- Perform action
-        ix.chat.Send(client, "action", text)
-
-        return false  -- Message sent via chat
-    end,
-
-    CheckPermissions = function(self, character)
-        -- Custom permission logic
-        return character:GetFaction() == FACTION_POLICE
-    end
-})
-```
+1. **Basic Test**: Type command with valid arguments
+2. **Invalid Arguments**: Try wrong types/values
+3. **Permission Test**: Test with different user groups
+4. **Edge Cases**: Empty strings, negative numbers, nil values
+5. **Distance Check**: Test range limitations
+6. **Multiple Players**: Test interactions between players
 
 ## See Also
 
-- [Command System](../systems/commands.md) - Detailed command system reference
-- [Chat System](../systems/chat.md) - Chat types and messages
+- [Command System](../systems/commands.md) - Core command system reference
+- [Chat System](../systems/chat.md) - Chat integration
 - [Flag System](../systems/flags.md) - Permission flags
+- [Schema Structure](structure.md) - Schema directory layout
 - Source: `gamemode/core/libs/sh_command.lua`

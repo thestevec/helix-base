@@ -1,522 +1,493 @@
 # Schema Configuration
 
-> **Reference**: `schema/sh_schema.lua`
+> **Reference**: `gamemode/config/sh_config.lua`, `schema/sh_schema.lua`
 
-Schema configuration defines your gamemode's metadata, settings, and initialization logic.
+This guide shows you how to configure your schema's settings, define custom config options, and set schema metadata.
 
-## ⚠️ Important: Use Schema Configuration System
+## ⚠️ Important: Use Built-in Helix Config System
 
-**Always use the schema configuration table** rather than creating custom initialization systems. The framework provides:
-- Automatic schema metadata loading
-- Configuration variable management
-- Schema-specific hooks
-- Integration with core systems
+**Always use `ix.config.Add()` and `ix.option.Add()`** for schema settings. The framework provides:
+- Automatic database persistence
+- Admin UI for changing values at runtime
+- Network synchronization between server and clients
+- Type validation
+- Change callbacks
 
 ## Core Concepts
 
-### What is Schema Configuration?
+### Schema Metadata
 
-Schema configuration is the central setup file that:
-- Defines schema metadata (name, author, description)
-- Sets up schema-specific settings
-- Initializes schema systems
-- Includes additional schema files
-
-### Schema vs Plugin Configuration
-
-- **Schema**: Core gamemode settings that define your RP setting
-- **Plugin**: Optional features that can be toggled on/off
-
-## Required Schema Files
-
-### gamemode/init.lua
-
-**Reference**: Derive from Helix gamemode
+Every schema must define basic information in `schema/sh_schema.lua`:
 
 ```lua
--- gamemode/init.lua (SERVER)
-AddCSLuaFile("cl_init.lua")
-DeriveGamemode("helix")
-```
-
-**⚠️ Do NOT**: Add any other code to this file. It only derives from Helix.
-
-### gamemode/cl_init.lua
-
-**Reference**: Client entry point
-
-```lua
--- gamemode/cl_init.lua (CLIENT)
-DeriveGamemode("helix")
-```
-
-**⚠️ Do NOT**: Add any other code here either.
-
-### schema/sh_schema.lua
-
-**Reference**: Main schema configuration (REQUIRED)
-
-```lua
--- schema/sh_schema.lua
-Schema.name = "My Roleplay"
+Schema.name = "My Schema Name"
 Schema.author = "Your Name"
-Schema.description = "A custom roleplay schema"
+Schema.description = "A description of your roleplay setting"
+Schema.version = "1.0.0"
 
--- Optional: Include other schema files
+-- Optional: Load additional schema files
 ix.util.Include("sv_schema.lua")
 ix.util.Include("cl_schema.lua")
 ```
 
-## Schema Properties
+### Configuration Types
 
-### Required Properties
+Helix provides two configuration systems:
 
-```lua
--- schema/sh_schema.lua
-Schema.name = "Schema Name"          -- Display name (REQUIRED)
-Schema.author = "Author Name"        -- Creator name (REQUIRED)
-Schema.description = "Description"   -- Brief description (REQUIRED)
-```
+1. **ix.config** - Server-wide settings (saved in database, admin-configurable)
+2. **ix.option** - Per-player client preferences (saved locally on each client)
 
-**⚠️ If missing**: Schema will still load but show default values.
+## Schema Metadata Configuration
 
-### Optional Properties
+### Basic Schema Information
+
+**Reference**: `schema/sh_schema.lua`
 
 ```lua
-Schema.version = "1.0.0"             -- Version number
-Schema.discord = "discord.gg/link"   -- Discord invite link
-Schema.website = "https://example.com" -- Website URL
+-- File: schema/sh_schema.lua
+Schema.name = "Half-Life 2 Roleplay"
+Schema.author = "Community"
+Schema.description = "Roleplay in the Half-Life 2 universe"
+
+-- Optional version tracking
+Schema.version = "2.1.4"
+
+-- Optional: Include other schema files
+ix.util.Include("sv_schema.lua")  -- Server-only schema code
+ix.util.Include("cl_schema.lua")  -- Client-only schema code
 ```
 
-### Automatic Properties
+### Schema Information Usage
 
-**Reference**: `gamemode/core/libs/sh_plugin.lua:470`
-
-Framework automatically adds:
 ```lua
-Schema.folder = "myschema"           -- Schema folder name
-Schema.uniqueID = "myschema"         -- Same as folder
-Schema.isHL2RP = false               -- Set to true for HL2RP schemas
+-- Access schema information anywhere
+print(Schema.name)     -- "Half-Life 2 Roleplay"
+print(Schema.author)   -- "Community"
+print(Schema.folder)   -- "hl2rp" (automatically set to schema folder name)
 ```
 
-## Configuration Variables
+## Server Configuration (ix.config)
 
-### Using ix.config
+### Adding Server Config Options
 
 **Reference**: `gamemode/core/libs/sh_config.lua`
 
-Schema can define custom configuration variables:
+Add server-wide configuration in `schema/sh_schema.lua` or your plugin files:
 
 ```lua
--- schema/sh_schema.lua
-ix.config.Add("mySchemaOption", true, "Enable custom feature", function(oldValue, newValue)
-    print("mySchemaOption changed from", oldValue, "to", newValue)
-end, {
-    category = "schema"
-})
-
-ix.config.Add("maxSalary", 500, "Maximum salary amount", nil, {
+-- File: schema/sh_schema.lua
+ix.config.Add("startingMoney", 100, "Money given to new characters", nil, {
     data = {min = 0, max = 10000},
-    category = "schema"
+    category = "characters"
 })
 
-ix.config.Add("startingMoney", 100, "Starting money for new characters", nil, {
-    data = {min = 0, max = 1000},
-    category = "schema"
+ix.config.Add("enableVoice", true, "Allow voice chat in game", function(oldValue, newValue)
+    if newValue then
+        print("Voice chat enabled")
+    else
+        print("Voice chat disabled")
+    end
+end, {
+    category = "gameplay"
+})
+
+ix.config.Add("serverName", "My Server", "Name shown in scoreboard", nil, {
+    category = "general"
 })
 ```
 
 ### Getting Config Values
 
 ```lua
--- Anywhere in schema/plugins
-local value = ix.config.Get("mySchemaOption", false)
-
-if value then
-    -- Feature enabled
-end
-
+-- Get config value with optional default
 local startMoney = ix.config.Get("startingMoney", 100)
+local voiceEnabled = ix.config.Get("enableVoice", true)
+
+-- Use in character creation
+function Schema:OnCharacterCreated(client, character)
+    local money = ix.config.Get("startingMoney", 100)
+    character:SetMoney(money)
+end
 ```
 
-## Schema Initialization
+### Config with Callbacks
 
-### Including Schema Files
-
-**Reference**: Schema file inclusion
+**Reference**: `gamemode/core/libs/sh_config.lua:44`
 
 ```lua
--- schema/sh_schema.lua
-Schema.name = "My Schema"
-Schema.author = "Me"
-Schema.description = "My awesome schema"
-
--- Include server file
-if SERVER then
-    ix.util.Include("sv_schema.lua")
-end
-
--- Include client file
-if CLIENT then
-    ix.util.Include("cl_schema.lua")
-end
-
--- Or include both (auto-sends to client)
-ix.util.Include("sv_schema.lua")
-ix.util.Include("cl_schema.lua")
-```
-
-### Server Schema File
-
-```lua
--- schema/sv_schema.lua
--- Server-only initialization
-
-function Schema:InitPostEntity()
-    -- Called after entities are initialized
-    print("Server initialized!")
-end
-
-function Schema:PlayerLoadedCharacter(client, character, lastChar)
-    -- Give starting money
-    if not character:GetData("receivedStartingMoney") then
-        local startMoney = ix.config.Get("startingMoney", 100)
-        character:GiveMoney(startMoney)
-        character:SetData("receivedStartingMoney", true)
-    end
-end
-```
-
-### Client Schema File
-
-```lua
--- schema/cl_schema.lua
--- Client-only initialization
-
-function Schema:HUDPaint()
-    -- Custom HUD drawing
-end
-
-function Schema:OnCharacterMenuCreated(panel)
-    -- Customize character menu
-end
-```
-
-## Auto-Loading Directories
-
-**Reference**: `schema/` folder structure
-
-Framework automatically loads files from:
-
-### schema/items/
-
-Place item files with `sh_` prefix:
-
-```
-schema/items/
-├── sh_medkit.lua
-├── sh_weapon_pistol.lua
-└── sh_food_bread.lua
-```
-
-### schema/factions/
-
-Place faction files with `sh_` prefix:
-
-```
-schema/factions/
-├── sh_citizen.lua
-├── sh_police.lua
-└── sh_resistance.lua
-```
-
-### schema/classes/
-
-Place class files with `sh_` prefix:
-
-```
-schema/classes/
-├── sh_officer.lua
-├── sh_chief.lua
-└── sh_doctor.lua
-```
-
-### schema/commands/
-
-Optional custom commands:
-
-```
-schema/commands/
-└── sh_commands.lua
-```
-
-### schema/derma/
-
-Optional custom UI:
-
-```
-schema/derma/
-├── cl_menu.lua
-└── cl_custom_panel.lua
-```
-
-### schema/languages/
-
-Optional localization:
-
-```
-schema/languages/
-├── sh_english.lua
-└── sh_spanish.lua
-```
-
-## Complete Example
-
-### Minimal Schema
-
-```lua
--- schema/sh_schema.lua
-Schema.name = "Half-Life 2 Roleplay"
-Schema.author = "Community"
-Schema.description = "A roleplay schema set in the Half-Life 2 universe"
-Schema.version = "1.0.0"
-```
-
-### Full Schema Configuration
-
-```lua
--- schema/sh_schema.lua
-Schema.name = "Dark RP"
-Schema.author = "Your Name"
-Schema.description = "A custom dark roleplay schema"
-Schema.version = "2.1.0"
-Schema.discord = "discord.gg/example"
-Schema.website = "https://example.com"
-
--- Include additional files
-ix.util.Include("sv_schema.lua")
-ix.util.Include("cl_schema.lua")
-
--- Configuration options
-ix.config.Add("salaryEnabled", true, "Enable automatic salary", function(oldValue, newValue)
-    if newValue then
-        timer.Create("SchemaSalary", 300, 0, function()
-            Schema:PaySalaries()
-        end)
-    else
-        timer.Remove("SchemaSalary")
+-- Execute code when config changes
+ix.config.Add("maxSpeed", 250, "Maximum run speed", function(oldValue, newValue)
+    -- Update all players when config changes
+    for _, client in ipairs(player.GetAll()) do
+        client:SetRunSpeed(newValue)
     end
 end, {
-    category = "schema"
+    data = {min = 100, max = 500},
+    category = "gameplay"
+})
+```
+
+### Config Categories
+
+Organize configs into categories:
+
+```lua
+-- Gameplay settings
+ix.config.Add("respawnTime", 5, "Respawn delay in seconds", nil, {
+    data = {min = 0, max = 60},
+    category = "gameplay"
 })
 
-ix.config.Add("salaryAmount", 50, "Base salary amount", nil, {
+-- Economy settings
+ix.config.Add("salaryAmount", 50, "Default salary payment", nil, {
     data = {min = 0, max = 1000},
-    category = "schema"
+    category = "economy"
 })
 
-ix.config.Add("startingMoney", 100, "Starting money", nil, {
-    data = {min = 0, max = 10000},
-    category = "schema"
+-- Character settings
+ix.config.Add("maxCharacters", 5, "Max characters per player", nil, {
+    data = {min = 1, max = 10},
+    category = "characters"
+})
+```
+
+## Client Options (ix.option)
+
+### Adding Client Options
+
+**Reference**: `gamemode/core/libs/sh_option.lua:44`
+
+Define client-side preferences in `schema/cl_schema.lua`:
+
+```lua
+-- File: schema/cl_schema.lua
+ix.option.Add("showHints", ix.type.bool, true, {
+    category = "display"
 })
 
-ix.config.Add("enableVoiceChat", true, "Enable proximity voice", nil, {
-    category = "schema"
+ix.option.Add("hudScale", ix.type.number, 1, {
+    category = "display",
+    min = 0.5,
+    max = 2,
+    decimals = 1
 })
 
--- Custom functions
-function Schema:PaySalaries()
-    for _, client in ipairs(player.GetAll()) do
-        local character = client:GetCharacter()
-        if character then
-            local faction = ix.faction.indices[character:GetFaction()]
-            local amount = faction.pay or ix.config.Get("salaryAmount", 50)
+ix.option.Add("chatTimestamps", ix.type.bool, false, {
+    category = "chat"
+})
+```
 
-            if amount > 0 then
-                character:GiveMoney(amount)
-                client:Notify("Received salary: " .. ix.currency.Get(amount))
-            end
+### Getting Client Options
+
+```lua
+-- CLIENT
+local showHints = ix.option.Get("showHints", true)
+local hudScale = ix.option.Get("hudScale", 1)
+
+-- Use in HUD rendering
+hook.Add("HUDPaint", "DrawCustomHUD", function()
+    if not ix.option.Get("showHUD", true) then
+        return
+    end
+
+    local scale = ix.option.Get("hudScale", 1)
+    -- Draw HUD with scale
+end)
+```
+
+### Networked Options
+
+**Reference**: `gamemode/core/libs/sh_option.lua:82`
+
+Make client options available on server:
+
+```lua
+-- File: schema/sh_schema.lua (SHARED)
+ix.option.Add("language", ix.type.string, "english", {
+    category = "general",
+    bNetworked = true,  -- Send to server
+    populate = function()
+        return {
+            ["english"] = "English",
+            ["spanish"] = "Spanish",
+            ["french"] = "French"
+        }
+    end
+})
+
+-- SERVER - Get client's option value
+local lang = ix.option.Get(client, "language", "english")
+client:ChatPrint("Your language: " .. lang)
+```
+
+### Option with Callback
+
+**Reference**: `gamemode/core/libs/sh_option.lua:85`
+
+```lua
+-- CLIENT
+ix.option.Add("fov", ix.type.number, 90, {
+    category = "display",
+    min = 75,
+    max = 110,
+    OnChanged = function(oldValue, newValue)
+        -- Update FOV when changed
+        LocalPlayer():SetFOV(newValue, 0.5)
+    end
+})
+```
+
+## Complete Configuration Example
+
+### Full Schema Config
+
+```lua
+-- File: schema/sh_schema.lua
+Schema.name = "Fallout Roleplay"
+Schema.author = "Schema Team"
+Schema.description = "Post-apocalyptic roleplay in the Fallout universe"
+Schema.version = "3.0.1"
+
+-- Server-wide settings
+ix.config.Add("startingMoney", 500, "Caps given to new characters", nil, {
+    data = {min = 0, max = 5000},
+    category = "economy"
+})
+
+ix.config.Add("radStormEnabled", true, "Enable radiation storms", nil, {
+    category = "gameplay"
+})
+
+ix.config.Add("radStormInterval", 1800, "Seconds between rad storms", nil, {
+    data = {min = 300, max = 7200},
+    category = "gameplay"
+})
+
+ix.config.Add("startingRadiation", 0, "Starting radiation level", nil, {
+    data = {min = 0, max = 100},
+    category = "gameplay"
+})
+
+-- Client options (define in cl_schema.lua or with CLIENT check)
+if CLIENT then
+    ix.option.Add("enablePipboy", ix.type.bool, true, {
+        category = "schema"
+    })
+
+    ix.option.Add("hudStyle", ix.type.string, "classic", {
+        category = "schema",
+        populate = function()
+            return {
+                ["classic"] = "Classic Fallout",
+                ["modern"] = "Modern UI",
+                ["minimal"] = "Minimal"
+            }
+        end,
+        OnChanged = function(oldValue, newValue)
+            -- Rebuild HUD with new style
+            hook.Run("RebuildHUD", newValue)
         end
+    })
+end
+
+-- Load other schema files
+ix.util.Include("sv_schema.lua")
+ix.util.Include("cl_schema.lua")
+```
+
+## Using Config in Schema Hooks
+
+### Character Creation
+
+```lua
+-- File: schema/sv_schema.lua
+function Schema:OnCharacterCreated(client, character)
+    -- Use config for starting money
+    local startMoney = ix.config.Get("startingMoney", 500)
+    character:SetMoney(startMoney)
+
+    -- Use config for starting radiation
+    local startRads = ix.config.Get("startingRadiation", 0)
+    character:SetData("radiation", startRads)
+
+    -- Give starting items based on config
+    if ix.config.Get("giveStarterKit", true) then
+        local inventory = character:GetInventory()
+        inventory:Add("item_water")
+        inventory:Add("item_food")
     end
 end
 ```
 
-### schema/sv_schema.lua
+### Player Spawn
 
 ```lua
--- Server initialization
-
-function Schema:InitPostEntity()
-    -- Start salary timer if enabled
-    if ix.config.Get("salaryEnabled") then
-        timer.Create("SchemaSalary", 300, 0, function()
-            self:PaySalaries()
-        end)
-    end
-end
-
-function Schema:PlayerLoadedCharacter(client, character, lastChar)
-    -- First time setup
-    if not character:GetData("initialized") then
-        local startMoney = ix.config.Get("startingMoney", 100)
-        character:GiveMoney(startMoney)
-        character:SetData("initialized", true)
-
-        client:ChatPrint("Welcome to " .. self.name .. "!")
-    end
-end
-
+-- File: schema/sv_schema.lua
 function Schema:PlayerSpawn(client)
-    -- Set default speeds
-    client:SetRunSpeed(240)
-    client:SetWalkSpeed(100)
-    client:SetJumpPower(200)
+    -- Use config for spawn settings
+    local maxSpeed = ix.config.Get("maxSpeed", 250)
+    client:SetRunSpeed(maxSpeed)
+
+    local maxHealth = ix.config.Get("maxHealth", 100)
+    client:SetMaxHealth(maxHealth)
 end
 ```
 
-### schema/cl_schema.lua
+### HUD Rendering
 
 ```lua
--- Client initialization
-
-function Schema:InitPostEntity()
-    print("Client loaded schema:", self.name)
-end
-
+-- File: schema/cl_schema.lua
 function Schema:HUDPaint()
-    -- Custom HUD elements
-    local client = LocalPlayer()
-    local char = client:GetCharacter()
-
-    if char then
-        -- Draw custom info
+    -- Check client option
+    if not ix.option.Get("showCustomHUD", true) then
+        return
     end
-end
 
-function Schema:OnCharacterMenuCreated(panel)
-    -- Customize character menu
-    panel:SetTitle(self.name .. " - Character Selection")
+    local scale = ix.option.Get("hudScale", 1)
+    local style = ix.option.Get("hudStyle", "classic")
+
+    -- Render HUD based on options
+    self:DrawHUD(scale, style)
 end
+```
+
+## Config Data Types
+
+### Number Config
+
+```lua
+ix.config.Add("respawnTime", 5, "Respawn delay", nil, {
+    data = {
+        min = 0,      -- Minimum value
+        max = 60,     -- Maximum value
+        decimals = 1  -- Allow 1 decimal place
+    },
+    category = "gameplay"
+})
+```
+
+### Boolean Config
+
+```lua
+ix.config.Add("pvpEnabled", false, "Enable PvP combat", nil, {
+    category = "gameplay"
+})
+```
+
+### String Config
+
+```lua
+ix.config.Add("motd", "Welcome to the server!", "Message of the day", nil, {
+    category = "general"
+})
+```
+
+### Array/Choice Config
+
+```lua
+-- For options (client-side)
+ix.option.Add("language", ix.type.string, "english", {
+    category = "general",
+    populate = function()
+        return {
+            ["english"] = "English",
+            ["spanish"] = "Spanish"
+        }
+    end
+})
 ```
 
 ## Best Practices
 
 ### ✅ DO
 
-- Set all required properties (name, author, description)
-- Use `ix.config.Add()` for configurable settings
-- Keep `sh_schema.lua` clean and readable
-- Organize code into separate files (sv_schema.lua, cl_schema.lua)
-- Use schema hooks for game logic
-- Document your config options
-- Use categories for organization
+- Define all configs in `schema/sh_schema.lua`
+- Use meaningful category names
+- Set appropriate min/max ranges for numbers
+- Provide clear descriptions
+- Use callbacks for dynamic updates
+- Use `ix.config` for server settings
+- Use `ix.option` for client preferences
+- Test config changes before deployment
 
 ### ❌ DON'T
 
-- Don't add code to gamemode/init.lua or gamemode/cl_init.lua
-- Don't modify Helix core files for schema settings
+- Don't create custom config files (use `ix.config`)
 - Don't hardcode values that should be configurable
-- Don't put everything in one file
-- Don't create custom loading systems
-- Don't bypass ix.config for settings
+- Don't forget to set default values
+- Don't use server configs for client-only settings
+- Don't access config tables directly (use `ix.config.Get()`)
+- Don't create configs without categories
+- Don't forget realm checks (`if CLIENT then`)
 
 ## Common Patterns
 
-### Faction-Based Starting Items
+### Economy Settings
 
 ```lua
-function Schema:PlayerLoadedCharacter(client, character, lastChar)
-    if not character:GetData("receivedStartingItems") then
-        local faction = ix.faction.indices[character:GetFaction()]
-        local inventory = character:GetInventory()
-
-        -- Give faction-specific items
-        if faction.uniqueID == "citizen" then
-            inventory:Add("item_phone")
-        elseif faction.uniqueID == "police" then
-            inventory:Add("item_radio")
-            inventory:Add("item_handcuffs")
-        end
-
-        character:SetData("receivedStartingItems", true)
-    end
-end
-```
-
-### Time-Based Events
-
-```lua
-function Schema:InitPostEntity()
-    -- Daily reset at midnight
-    timer.Create("SchemaDailyReset", 60, 0, function()
-        local hour = tonumber(os.date("%H"))
-
-        if hour == 0 then
-            self:DailyReset()
-        end
-    end)
-end
-
-function Schema:DailyReset()
-    -- Reset daily quests, salaries, etc.
-    for _, client in ipairs(player.GetAll()) do
-        local char = client:GetCharacter()
-        if char then
-            char:SetData("dailyQuestDone", false)
-        end
-    end
-end
-```
-
-### Custom Config Categories
-
-```lua
--- Organize configs by category
-ix.config.Add("economyInflation", 1.0, "Economy inflation rate", nil, {
-    data = {min = 0.1, max = 10.0, decimals = 2},
-    category = "economy"
-})
-
-ix.config.Add("economyStartMoney", 500, "Starting money", nil, {
+ix.config.Add("startingMoney", 100, "Starting money", nil, {
     data = {min = 0, max = 10000},
     category = "economy"
 })
 
-ix.config.Add("combatEnabled", true, "Enable PvP combat", nil, {
+ix.config.Add("salaryInterval", 300, "Salary payment interval", nil, {
+    data = {min = 60, max = 3600},
+    category = "economy"
+})
+
+ix.config.Add("priceMultiplier", 1, "Item price multiplier", nil, {
+    data = {min = 0.1, max = 10, decimals = 1},
+    category = "economy"
+})
+```
+
+### Gameplay Toggles
+
+```lua
+ix.config.Add("permadeath", false, "Enable permanent death", nil, {
     category = "gameplay"
 })
 
-ix.config.Add("combatDamageMultiplier", 1.0, "Damage multiplier", nil, {
-    data = {min = 0.1, max = 5.0, decimals = 1},
+ix.config.Add("friendlyFire", false, "Enable team damage", nil, {
+    category = "gameplay"
+})
+
+ix.config.Add("dropWeapons", true, "Drop weapons on death", nil, {
     category = "gameplay"
 })
 ```
 
-## Common Issues
+### Display Options
 
-### Schema not loading
+```lua
+-- CLIENT
+ix.option.Add("showHints", ix.type.bool, true, {
+    category = "display"
+})
 
-**Cause**: Missing required files or wrong folder structure
-**Fix**: Ensure you have:
-- gamemode/init.lua
-- gamemode/cl_init.lua
-- schema/sh_schema.lua
-- Correct `DeriveGamemode("helix")` calls
+ix.option.Add("showCrosshair", ix.type.bool, true, {
+    category = "display"
+})
 
-### Config changes not saving
+ix.option.Add("screenEffects", ix.type.bool, true, {
+    category = "display"
+})
+```
 
-**Cause**: Config not properly defined
-**Fix**: Use `ix.config.Add()` with correct parameters and category
+## Config Admin Panel
 
-### Files not auto-loading
+Admins can change config values in-game:
 
-**Cause**: Wrong file naming or location
-**Fix**: Place files in correct directories with `sh_` prefix
+1. Press **F1** to open character menu
+2. Navigate to **Config** tab
+3. Find config by category
+4. Adjust value (changes saved to database)
+
+**⚠️ Note**: Only configs added with `ix.config.Add()` appear in the admin panel.
 
 ## See Also
 
-- [Schema Structure](structure.md) - Directory organization
-- [Configuration System](../systems/configuration.md) - Config system details
-- [Plugin System](../plugins/plugin-system.md) - Plugin configuration
-- Source: `gamemode/core/libs/sh_plugin.lua`
+- [Configuration System](../systems/configuration.md) - Core config system reference
+- [Schema Structure](structure.md) - Schema directory layout
 - Source: `gamemode/core/libs/sh_config.lua`
+- Source: `gamemode/core/libs/sh_option.lua`

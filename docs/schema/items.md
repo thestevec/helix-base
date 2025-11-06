@@ -1,198 +1,189 @@
-# Creating Schema Items
+# Creating Items for Your Schema
 
 > **Reference**: `gamemode/core/libs/sh_item.lua`, `schema/items/`
 
-Items are the objects players interact with in your schema. This guide shows how to create items specifically for your schema.
+This guide shows you how to create custom items for your schema. Items are the objects characters can carry, use, equip, and trade.
 
 ## ⚠️ Important: Use Helix Item System
 
-**Always use Helix's built-in item registration** rather than creating custom item systems. The framework provides:
-- Automatic registration from `schema/items/` folder
-- Database persistence
+**Always create items using Helix's item system** rather than creating custom inventory solutions. The framework provides:
+- Automatic item registration from files
+- Grid-based inventory system
+- Database persistence for item instances
 - Network synchronization
-- Inventory integration
-- Item actions and interactions
+- Item actions (use, equip, drop)
+- Data storage per item instance
 
 ## Core Concepts
 
-### What are Schema Items?
+### Items in Your Schema
 
-Schema items are unique to your roleplay setting:
-- **HL2RP**: Citizen ID cards, rations, Combine equipment
-- **DarkRP**: Job-specific tools, drugs, money printers
-- **Medieval RP**: Swords, armor, food, crafting materials
+Items define the objects in your world:
+- **Half-Life 2 RP**: Rations, medkits, weapons, clothing, tokens
+- **Star Wars RP**: Lightsabers, blasters, credits, datapads
+- **Medieval RP**: Swords, shields, potions, gold coins
 
 Each item has:
 - Visual representation (model, icon)
-- Inventory size (width, height)
-- Functions (use, equip, drop)
-- Custom data (durability, charges, owner)
+- Physical properties (size, weight)
+- Behavior (what happens when used)
+- Per-instance data (durability, owner, etc.)
 
-## Creating Items
+### File-Based Auto-Loading
 
-### File Location
+**Reference**: `gamemode/core/libs/sh_item.lua`
 
-**Place item files** in:
+Helix automatically loads item files from:
 ```
 schema/items/sh_itemname.lua
 ```
 
-**File naming convention**:
-- `sh_` prefix (shared realm)
-- Descriptive item name
-- `.lua` extension
+The file prefix `sh_` makes it shared (loads on both server and client).
 
-Examples:
-- `sh_cid.lua` → Citizen ID card
-- `sh_ration.lua` → Food ration
-- `sh_medkit.lua` → Medical kit
+## Creating Your First Item
 
-### Basic Item Template
+### Step 1: Create Item File
+
+Create a new file in `schema/items/`:
 
 ```lua
--- schema/items/sh_medkit.lua
+-- File: schema/items/sh_medkit.lua
 ITEM.name = "Medical Kit"
-ITEM.description = "A kit containing medical supplies"
+ITEM.description = "A standard medical kit that restores 50 health."
 ITEM.model = "models/items/healthkit.mdl"
 ITEM.width = 2
 ITEM.height = 1
 ITEM.category = "Medical"
-ITEM.price = 100
+ITEM.price = 150
 
 ITEM.functions.Use = {
     name = "Use",
+    icon = "icon16/heart.png",
     OnRun = function(item)
         local client = item.player
 
         if SERVER then
-            client:SetHealth(math.min(client:Health() + 50, 100))
+            local health = client:Health()
+            local maxHealth = client:GetMaxHealth()
+
+            if health >= maxHealth then
+                client:Notify("You are already at full health")
+                return false  -- Don't remove item
+            end
+
+            client:SetHealth(math.min(health + 50, maxHealth))
             client:EmitSound("items/medshot4.wav")
         end
 
         return true  -- Remove item after use
     end,
     OnCanRun = function(item)
-        return item.player:Health() < 100
+        return item.player:Health() < item.player:GetMaxHealth()
     end
 }
 ```
 
-**⚠️ Do NOT**:
-```lua
--- WRONG: Don't create custom item tables
-CUSTOM_ITEMS = {}
-CUSTOM_ITEMS["medkit"] = {...}
+### Step 2: Test Your Item
 
--- WRONG: Don't bypass item system
-function GiveCustomItem(client)
-    client.customItems = client.customItems or {}
-    table.insert(client.customItems, {...})
-end
+Use console or admin command to give yourself the item:
+
+```lua
+-- In server console
+lua_run player.GetByID(1):GetCharacter():GetInventory():Add("medkit")
 ```
 
-## Required Properties
-
-### Minimal Requirements
+Or create a test command:
 
 ```lua
-ITEM.name = "Item Name"                        -- REQUIRED
-ITEM.description = "What the item does"        -- REQUIRED
-ITEM.model = "models/path/to/model.mdl"        -- REQUIRED
+-- File: schema/commands/sh_giveitem.lua
+ix.command.Add("GiveItem", {
+    description = "Give yourself a test item",
+    arguments = {ix.type.string},
+    OnRun = function(self, client, itemID)
+        local inventory = client:GetCharacter():GetInventory()
+        inventory:Add(itemID)
+        return "Gave " .. itemID
+    end
+})
 ```
 
-**⚠️ If missing**: Item may not display properly or register correctly.
+## Item Properties
 
-## Common Item Examples
-
-### Citizen ID Card (HL2RP)
+### Required Properties
 
 ```lua
--- schema/items/sh_cid.lua
-ITEM.name = "Citizen ID"
-ITEM.description = "An identification card issued by the Combine"
-ITEM.model = "models/gibs/metal_gib4.mdl"
-ITEM.width = 1
-ITEM.height = 1
-ITEM.category = "Documents"
+ITEM.name = "Item Name"          -- REQUIRED: Display name
+ITEM.description = "Description"  -- REQUIRED: Tooltip text
+ITEM.model = "models/path.mdl"   -- REQUIRED: World model
+```
 
-function ITEM:GetName()
-    return self.name .. " #" .. (self:GetData("cidNumber", "00000"))
-end
+### Common Properties
 
-function ITEM:GetDescription()
-    local description = self.description
+```lua
+ITEM.width = 1                   -- Grid width (default: 1)
+ITEM.height = 1                  -- Grid height (default: 1)
+ITEM.category = "Miscellaneous"  -- Organization category
+ITEM.price = 100                 -- Default vendor price
+ITEM.flag = "v"                  -- Required flag to use
+ITEM.rarity = "rare"             -- Rarity tier (affects color)
+ITEM.weight = 1                  -- Weight in kg (future use)
+ITEM.skin = 0                    -- Model skin
+ITEM.material = ""               -- Override material
+```
 
-    local cidNumber = self:GetData("cidNumber", "00000")
-    local owner = self:GetData("owner", "Unknown")
+### Icon Customization
 
-    description = description .. "\n\nCID: #" .. cidNumber
-    description = description .. "\nOwner: " .. owner
-
-    return description
-end
-
-function ITEM:OnInstanced(invID, x, y, item)
-    -- Generate random CID number
-    item:SetData("cidNumber", string.format("%05d", math.random(1, 99999)))
-
-    -- Set owner
-    local character = item:GetOwner():GetCharacter()
-    if character then
-        item:SetData("owner", character:GetName())
-    end
-end
-
-ITEM.functions.Show = {
-    name = "Show",
-    OnRun = function(item)
-        local client = item.player
-        local trace = client:GetEyeTrace()
-        local target = trace.Entity
-
-        if IsValid(target) and target:IsPlayer() and target:GetPos():Distance(client:GetPos()) <= 96 then
-            local owner = item:GetData("owner", "Unknown")
-            local cidNumber = item:GetData("cidNumber", "00000")
-
-            target:ChatPrint(client:Name() .. " shows their ID:")
-            target:ChatPrint("CID #" .. cidNumber .. " - " .. owner)
-        else
-            client:Notify("No one nearby to show")
-        end
-
-        return false  -- Don't remove item
-    end
+```lua
+-- Custom camera for icon render
+ITEM.iconCam = {
+    pos = Vector(0, 0, 200),
+    ang = Angle(90, 0, 0),
+    fov = 45
 }
+
+-- Or use a custom icon image
+ITEM.icon = "vgui/inventory/item_icon.png"
 ```
 
-### Food Ration
+## Complete Item Examples
+
+### Consumable Item (Food)
 
 ```lua
--- schema/items/sh_ration.lua
-ITEM.name = "Food Ration"
-ITEM.description = "A standard Combine food supplement"
-ITEM.model = "models/props_junk/garbage_metalcan001a.mdl"
+-- File: schema/items/sh_food_bread.lua
+ITEM.name = "Bread Loaf"
+ITEM.description = "A fresh loaf of bread. Restores 25 hunger."
+ITEM.model = "models/props_junk/garbage_bread001a.mdl"
 ITEM.width = 1
 ITEM.height = 1
-ITEM.category = "Consumables"
+ITEM.category = "Food"
 ITEM.price = 20
 
-ITEM.functions.Consume = {
-    name = "Consume",
-    icon = "icon16/cup.png",
+ITEM.functions.Eat = {
+    name = "Eat",
+    icon = "icon16/cake.png",
     OnRun = function(item)
         local client = item.player
+        local character = client:GetCharacter()
 
         if SERVER then
-            client:SetHealth(math.min(client:Health() + 25, 100))
-            client:EmitSound("npc/barnacle/barnacle_gulp2.wav")
-            client:ChatPrint("You consumed the ration")
+            local hunger = character:GetData("hunger", 100)
 
-            -- Restore stamina
-            local character = client:GetCharacter()
-            character:SetData("stamina", 100)
+            if hunger >= 100 then
+                client:Notify("You are not hungry")
+                return false
+            end
+
+            character:SetData("hunger", math.min(hunger + 25, 100))
+            client:EmitSound("npc/barnacle/barnacle_crunch" .. math.random(2, 3) .. ".wav")
+            client:ChatPrint("You ate the bread and feel less hungry.")
         end
 
         return true  -- Remove item
+    end,
+    OnCanRun = function(item)
+        local character = item.player:GetCharacter()
+        return character:GetData("hunger", 100) < 100
     end
 }
 ```
@@ -200,77 +191,405 @@ ITEM.functions.Consume = {
 ### Weapon Item
 
 ```lua
--- schema/items/sh_pistol.lua
+-- File: schema/items/sh_weapon_pistol.lua
 ITEM.name = "9mm Pistol"
-ITEM.description = "A standard semi-automatic pistol"
-ITEM.model = "models/weapons/w_pistol.mdl"
+ITEM.description = "A standard 9mm semi-automatic pistol."
+ITEM.model = "models/weapons/w_pist_glock18.mdl"
+ITEM.base = "base_weapons"  -- Inherit weapon functionality
+ITEM.weapon = "weapon_pistol"
 ITEM.width = 2
 ITEM.height = 1
 ITEM.category = "Weapons"
 ITEM.price = 500
-ITEM.base = "base_weapons"  -- Inherit from weapon base
-ITEM.weapon = "weapon_pistol"
-ITEM.ammo = "pistol"
+ITEM.flag = "v"  -- Requires vendor flag
 
-function ITEM:OnInstanced(invID, x, y, item)
-    -- Set random condition
-    item:SetData("condition", math.random(75, 100))
+-- Weapon items get Equip/Unequip automatically from base
+```
+
+### Armor Item (Outfit)
+
+```lua
+-- File: schema/items/sh_outfit_vest.lua
+ITEM.name = "Kevlar Vest"
+ITEM.description = "Ballistic protection vest. Provides 50 armor."
+ITEM.model = "models/items/item_item_crate.mdl"
+ITEM.base = "base_outfit"
+ITEM.width = 2
+ITEM.height = 2
+ITEM.category = "Clothing"
+ITEM.price = 300
+
+ITEM.outfitCategory = "torso"
+ITEM.bodyGroups = {
+    ["torso"] = 1
+}
+
+-- Override OnSet to give armor
+function ITEM:OnEquipped(client)
+    client:SetArmor(50)
 end
 
-function ITEM:GetDescription()
-    local description = self.description
-    local condition = self:GetData("condition", 100)
-
-    description = description .. "\n\nCondition: " .. condition .. "%"
-
-    return description
-end
-
-function ITEM:PaintOver(item, w, h)
-    -- Draw condition bar
-    local condition = item:GetData("condition", 100) / 100
-    local barColor = Color(255 * (1 - condition), 255 * condition, 0)
-
-    draw.RoundedBox(0, 4, h - 8, w - 8, 4, Color(0, 0, 0, 200))
-    draw.RoundedBox(0, 5, h - 7, (w - 10) * condition, 2, barColor)
+function ITEM:OnUnequipped(client)
+    client:SetArmor(0)
 end
 ```
 
-### Crafting Material
+### Container Item (Backpack)
 
 ```lua
--- schema/items/sh_scrap_metal.lua
-ITEM.name = "Scrap Metal"
-ITEM.description = "Pieces of salvaged metal"
-ITEM.model = "models/gibs/metal_gib4.mdl"
-ITEM.width = 1
-ITEM.height = 1
-ITEM.category = "Materials"
-ITEM.price = 10
+-- File: schema/items/sh_bag_backpack.lua
+ITEM.name = "Backpack"
+ITEM.description = "A sturdy backpack for carrying extra items."
+ITEM.model = "models/props_c17/suitcase_passenger_physics.mdl"
+ITEM.base = "base_bags"
+ITEM.width = 2
+ITEM.height = 2
+ITEM.category = "Storage"
+ITEM.price = 200
 
+-- Internal inventory size
+ITEM.invWidth = 5
+ITEM.invHeight = 5
+
+-- Bags get Open action automatically from base
+```
+
+### Multi-Use Item (Advanced)
+
+```lua
+-- File: schema/items/sh_tool_multi.lua
+ITEM.name = "Multi-Tool"
+ITEM.description = "A versatile tool with multiple functions."
+ITEM.model = "models/props_c17/tools_wrench01a.mdl"
+ITEM.width = 1
+ITEM.height = 2
+ITEM.category = "Tools"
+ITEM.price = 350
+
+-- Initialize durability
 function ITEM:OnInstanced(invID, x, y, item)
-    item:SetData("amount", 1)
+    item:SetData("durability", 100)
+    item:SetData("uses", 0)
+end
+
+-- Show durability in description
+function ITEM:GetDescription()
+    local durability = self:GetData("durability", 100)
+    local uses = self:GetData("uses", 0)
+    return self.description .. "\nDurability: " .. durability .. "%\nUses: " .. uses
+end
+
+-- Repair action
+ITEM.functions.Repair = {
+    name = "Repair Vehicle",
+    icon = "icon16/wrench.png",
+    OnRun = function(item)
+        local client = item.player
+        local trace = client:GetEyeTrace()
+        local entity = trace.Entity
+
+        if not IsValid(entity) or not entity:IsVehicle() then
+            client:Notify("You must look at a vehicle")
+            return false
+        end
+
+        if trace.HitPos:Distance(client:GetPos()) > 100 then
+            client:Notify("Too far away")
+            return false
+        end
+
+        if SERVER then
+            -- Repair vehicle
+            entity:SetHealth(entity:GetMaxHealth())
+            client:EmitSound("items/battery_pickup.wav")
+
+            -- Damage durability
+            local durability = item:GetData("durability", 100) - 10
+            item:SetData("durability", math.max(durability, 0))
+            item:SetData("uses", item:GetData("uses", 0) + 1)
+
+            -- Break tool if durability reaches 0
+            if durability <= 0 then
+                client:Notify("Your multi-tool broke!")
+                return true  -- Remove item
+            end
+        end
+
+        return false  -- Keep item
+    end
+}
+
+-- Lock pick action
+ITEM.functions.Lockpick = {
+    name = "Pick Lock",
+    icon = "icon16/key.png",
+    OnRun = function(item)
+        local client = item.player
+        local trace = client:GetEyeTrace()
+        local door = trace.Entity
+
+        if not IsValid(door) or not door:IsDoor() then
+            client:Notify("You must look at a door")
+            return false
+        end
+
+        if SERVER then
+            door:Fire("unlock")
+            client:EmitSound("npc/metropolice/gear" .. math.random(1, 6) .. ".wav")
+
+            -- Damage durability
+            local durability = item:GetData("durability", 100) - 5
+            item:SetData("durability", math.max(durability, 0))
+
+            if durability <= 0 then
+                return true  -- Break and remove
+            end
+        end
+
+        return false
+    end
+}
+
+-- Repair tool action
+ITEM.functions.RepairTool = {
+    name = "Repair Tool",
+    icon = "icon16/cog.png",
+    OnRun = function(item)
+        if SERVER then
+            local durability = item:GetData("durability", 0)
+
+            if durability >= 100 then
+                item.player:Notify("Tool is already at full durability")
+                return false
+            end
+
+            item:SetData("durability", 100)
+            item.player:EmitSound("items/battery_pickup.wav")
+            item.player:Notify("Repaired multi-tool to 100%")
+        end
+
+        return false
+    end,
+    OnCanRun = function(item)
+        return item:GetData("durability", 100) < 100
+    end
+}
+
+-- Draw durability bar on icon
+function ITEM:PaintOver(item, w, h)
+    local durability = item:GetData("durability", 100) / 100
+    local barColor = Color(255 * (1 - durability), 255 * durability, 0)
+
+    draw.RoundedBox(0, 4, h - 8, w - 8, 4, Color(0, 0, 0, 200))
+    draw.RoundedBox(0, 5, h - 7, (w - 10) * durability, 2, barColor)
+end
+```
+
+## Using Base Items
+
+### Available Base Items
+
+**Reference**: `gamemode/items/base/`
+
+- `base_weapons` - Equippable weapons
+- `base_ammo` - Ammunition for weapons
+- `base_bags` - Container items
+- `base_outfit` - Clothing that changes appearance
+- `base_pacoutfit` - PAC3 outfit items
+
+### Inheriting from Base
+
+```lua
+-- Weapon inherits equip/unequip functionality
+ITEM.base = "base_weapons"
+ITEM.weapon = "weapon_ar2"
+
+-- Ammo inherits load functionality
+ITEM.base = "base_ammo"
+ITEM.ammo = "ar2"
+ITEM.ammoAmount = 30
+
+-- Bag inherits open/close functionality
+ITEM.base = "base_bags"
+ITEM.invWidth = 6
+ITEM.invHeight = 4
+```
+
+## Item Functions (Actions)
+
+### Defining Actions
+
+```lua
+ITEM.functions.ActionName = {
+    name = "Display Name",
+    icon = "icon16/icon.png",
+    OnRun = function(item)
+        -- item.player = player who clicked
+        -- Return true to remove item
+        -- Return false to keep item
+    end,
+    OnCanRun = function(item)
+        -- Return true to show button
+        -- Return false to disable/hide button
+    end,
+    bShowPrompt = false  -- Show confirmation dialog
+}
+```
+
+### Common Action Patterns
+
+```lua
+-- Use action (consumable)
+ITEM.functions.Use = {
+    name = "Use",
+    OnRun = function(item)
+        -- Apply effect
+        if SERVER then
+            item.player:SetHealth(100)
+        end
+        return true  -- Remove after use
+    end
+}
+
+-- Equip action (already in base_weapons)
+ITEM.functions.Equip = {
+    name = "Equip",
+    OnRun = function(item)
+        if SERVER then
+            item.player:Give(item.weapon)
+        end
+        return false  -- Don't remove
+    end
+}
+
+-- Inspect action (no effect)
+ITEM.functions.Inspect = {
+    name = "Inspect",
+    OnRun = function(item)
+        item.player:ChatPrint("This item looks interesting...")
+        return false  -- Don't remove
+    end
+}
+
+-- Destroy action (with confirmation)
+ITEM.functions.Destroy = {
+    name = "Destroy",
+    icon = "icon16/bin.png",
+    bShowPrompt = true,  -- Ask for confirmation
+    OnRun = function(item)
+        return true  -- Remove item
+    end
+}
+```
+
+## Item Data Storage
+
+### Setting and Getting Data
+
+```lua
+-- OnInstanced - called when item is created
+function ITEM:OnInstanced(invID, x, y, item)
+    item:SetData("condition", 100)
+    item:SetData("owner", "")
+    item:SetData("timestamp", os.time())
+end
+
+-- Getting data
+local condition = item:GetData("condition", 100)  -- Default to 100
+
+-- Setting data (automatically saved)
+item:SetData("condition", 50)
+```
+
+### Dynamic Item Name
+
+```lua
+function ITEM:GetName()
+    local condition = self:GetData("condition", 100)
+    local name = self.name
+
+    if condition < 25 then
+        name = name .. " (Broken)"
+    elseif condition < 50 then
+        name = name .. " (Damaged)"
+    elseif condition < 75 then
+        name = name .. " (Worn)"
+    end
+
+    return name
+end
+```
+
+### Dynamic Description
+
+```lua
+function ITEM:GetDescription()
+    local desc = self.description
+    local owner = self:GetData("owner", "")
+
+    desc = desc .. "\nCondition: " .. self:GetData("condition", 100) .. "%"
+
+    if owner != "" then
+        desc = desc .. "\nOwner: " .. owner
+    end
+
+    return desc
+end
+```
+
+## Best Practices
+
+### ✅ DO
+
+- Create items in `schema/items/` with `sh_` prefix
+- Always set name, description, and model
+- Use appropriate base items when available
+- Set reasonable width/height for grid
+- Validate player input in SERVER realm
+- Return true/false correctly in OnRun
+- Use OnCanRun to disable invalid actions
+- Test items in inventory
+- Provide meaningful descriptions
+- Use categories for organization
+
+### ❌ DON'T
+
+- Don't modify ITEM table at runtime (use SetData)
+- Don't create items without checking inventory space
+- Don't forget SERVER checks for important logic
+- Don't trust client-side item data
+- Don't create circular bag references
+- Don't forget to return value in OnRun
+- Don't bypass item system with custom tables
+- Don't use item properties for instance data
+
+## Common Patterns
+
+### Stackable Items
+
+```lua
+function ITEM:OnInstanced(invID, x, y, item)
+    item:SetData("stack", 1)
 end
 
 function ITEM:GetName()
-    local amount = self:GetData("amount", 1)
-    if amount > 1 then
-        return self.name .. " (x" .. amount .. ")"
+    local stack = self:GetData("stack", 1)
+    if stack > 1 then
+        return self.name .. " (x" .. stack .. ")"
     end
     return self.name
 end
 
--- Stack similar items
+-- Merge stacks when transferring
 function ITEM:CanTransfer(oldInv, newInv)
-    -- Try to merge with existing stacks
     for _, item in pairs(newInv:GetItems()) do
         if item.uniqueID == self.uniqueID and item:GetID() != self:GetID() then
-            local theirAmount = item:GetData("amount", 1)
-            local myAmount = self:GetData("amount", 1)
-            local maxStack = 99
+            local theirStack = item:GetData("stack", 1)
+            local myStack = self:GetData("stack", 1)
+            local maxStack = self.maxStack or 99
 
-            if theirAmount + myAmount <= maxStack then
-                item:SetData("amount", theirAmount + myAmount)
+            if theirStack + myStack <= maxStack then
+                item:SetData("stack", theirStack + myStack)
                 self:Remove()
                 return false
             end
@@ -281,440 +600,66 @@ function ITEM:CanTransfer(oldInv, newInv)
 end
 ```
 
-### Container Item
-
-```lua
--- schema/items/sh_backpack.lua
-ITEM.name = "Backpack"
-ITEM.description = "A sturdy backpack for carrying items"
-ITEM.model = "models/props_c17/suitcase001a.mdl"
-ITEM.width = 2
-ITEM.height = 2
-ITEM.category = "Containers"
-ITEM.price = 200
-ITEM.base = "base_bags"  -- Inherit from bag base
-ITEM.invWidth = 5
-ITEM.invHeight = 4
-
-function ITEM:OnInstanced(invID, x, y, item)
-    -- Create internal inventory
-    local inventory = ix.inventory.Create(self.invWidth, self.invHeight, item:GetID())
-    inventory.vars.isBag = item:GetID()
-    item:SetData("invID", inventory:GetID())
-end
-```
-
-## Item Properties
-
-### Display Properties
-
-```lua
-ITEM.name = "Display Name"                     -- Shown in inventory
-ITEM.description = "What it does"              -- Shown in tooltip
-ITEM.model = "models/path/to/model.mdl"        -- 3D model
-ITEM.skin = 0                                  -- Model skin
-ITEM.category = "Category"                     -- Organization
-```
-
-### Physical Properties
-
-```lua
-ITEM.width = 1                                 -- Inventory width
-ITEM.height = 1                                -- Inventory height
-ITEM.weight = 1                                -- Weight (future use)
-```
-
-### Gameplay Properties
-
-```lua
-ITEM.price = 100                               -- Default buy price
-ITEM.flag = "v"                                -- Required flag
-ITEM.faction = FACTION_POLICE                  -- Faction restriction
-ITEM.class = CLASS_OFFICER                     -- Class restriction
-```
-
-## Item Functions
-
-### Use Function
-
-Most common item function:
+### Timed Effects
 
 ```lua
 ITEM.functions.Use = {
-    name = "Use",                              -- Button text
-    icon = "icon16/tick.png",                  -- Button icon
+    name = "Use",
     OnRun = function(item)
         local client = item.player
 
         if SERVER then
-            -- Do something
-            client:SetHealth(math.min(client:Health() + 25, 100))
-        end
+            -- Immediate effect
+            client:SetRunSpeed(300)
 
-        return true  -- Remove item (false = keep)
-    end,
-    OnCanRun = function(item)
-        -- Return false to disable button
-        return item.player:Health() < 100
-    end
-}
-```
-
-### Multiple Functions
-
-Items can have multiple actions:
-
-```lua
-ITEM.functions.Equip = {
-    name = "Equip",
-    OnRun = function(item)
-        -- Equip item
-        return false
-    end
-}
-
-ITEM.functions.Drop = {
-    name = "Drop",
-    OnRun = function(item)
-        -- Drop item
-        return false
-    end
-}
-
-ITEM.functions.Destroy = {
-    name = "Destroy",
-    icon = "icon16/bin.png",
-    OnRun = function(item)
-        return true  -- Remove item
-    end,
-    bShowPrompt = true  -- Show confirmation
-}
-```
-
-## Item Hooks
-
-### OnInstanced
-
-Called when item is first created:
-
-```lua
-function ITEM:OnInstanced(invID, x, y, item)
-    -- Initialize custom data
-    item:SetData("condition", 100)
-    item:SetData("uses", 3)
-    item:SetData("timestamp", os.time())
-
-    -- Set owner
-    local character = item:GetOwner():GetCharacter()
-    if character then
-        item:SetData("owner", character:GetName())
-    end
-end
-```
-
-### OnRemoved
-
-Called before item is deleted:
-
-```lua
-function ITEM:OnRemoved()
-    -- Clean up references
-    print("Item removed:", self:GetID())
-
-    -- If item has internal inventory, it's auto-deleted
-end
-```
-
-### Dynamic Name and Description
-
-```lua
-function ITEM:GetName()
-    local condition = self:GetData("condition", 100)
-    return self.name .. " (" .. condition .. "%)"
-end
-
-function ITEM:GetDescription()
-    local desc = self.description
-    local uses = self:GetData("uses", 3)
-
-    desc = desc .. "\n\nUses remaining: " .. uses
-    desc = desc .. "\nCondition: " .. self:GetData("condition", 100) .. "%"
-
-    return desc
-end
-```
-
-### Custom Tooltip
-
-```lua
-function ITEM:PopulateTooltip(tooltip)
-    local owner = self:GetData("owner")
-
-    if owner then
-        local row = tooltip:AddRowAfter("description", "owner")
-        row:SetText("Owner: " .. owner)
-        row:SetBackgroundColor(Color(50, 50, 50))
-        row:SizeToContents()
-    end
-end
-```
-
-### Custom Icon Overlay
-
-```lua
-function ITEM:PaintOver(item, w, h)
-    local uses = item:GetData("uses", 3)
-    local maxUses = 3
-
-    -- Draw uses as circles
-    for i = 1, maxUses do
-        local color = i <= uses and Color(0, 255, 0) or Color(50, 50, 50)
-        draw.RoundedBox(8, 4 + (i - 1) * 12, h - 12, 8, 8, color)
-    end
-end
-```
-
-## Using Base Items
-
-### Available Base Items
-
-```lua
-ITEM.base = "base_weapons"      -- Equippable weapons
-ITEM.base = "base_ammo"         -- Ammunition
-ITEM.base = "base_bags"         -- Containers
-ITEM.base = "base_outfit"       -- Wearable clothing
-ITEM.base = "base_pacoutfit"    -- PAC3 outfits
-```
-
-### Weapon Base Example
-
-```lua
--- schema/items/sh_shotgun.lua
-ITEM.name = "Shotgun"
-ITEM.description = "A pump-action shotgun"
-ITEM.model = "models/weapons/w_shotgun.mdl"
-ITEM.base = "base_weapons"
-ITEM.weapon = "weapon_shotgun"
-ITEM.ammo = "buckshot"
-ITEM.width = 3
-ITEM.height = 1
-ITEM.price = 800
-ITEM.category = "Weapons"
-```
-
-### Outfit Base Example
-
-```lua
--- schema/items/sh_police_uniform.lua
-ITEM.name = "Police Uniform"
-ITEM.description = "Standard police uniform"
-ITEM.model = "models/props_c17/suitcase001a.mdl"
-ITEM.base = "base_outfit"
-ITEM.width = 2
-ITEM.height = 2
-ITEM.outfitCategory = "uniform"
-
-ITEM.bodyGroups = {
-    ["torso"] = 1,
-    ["legs"] = 1
-}
-```
-
-## Complete Item Examples
-
-### Lockpick
-
-```lua
--- schema/items/sh_lockpick.lua
-ITEM.name = "Lockpick"
-ITEM.description = "A tool for picking locks"
-ITEM.model = "models/props_c17/tools_wrench01a.mdl"
-ITEM.width = 1
-ITEM.height = 1
-ITEM.category = "Tools"
-ITEM.price = 150
-
-function ITEM:OnInstanced(invID, x, y, item)
-    item:SetData("uses", 3)
-end
-
-function ITEM:GetDescription()
-    return self.description .. "\n\nUses: " .. self:GetData("uses", 3)
-end
-
-ITEM.functions.Use = {
-    name = "Pick Lock",
-    OnRun = function(item)
-        local client = item.player
-        local trace = client:GetEyeTrace()
-        local door = trace.Entity
-
-        if not IsValid(door) or not door:IsDoor() then
-            client:Notify("You must be looking at a door")
-            return false
-        end
-
-        if door:GetPos():Distance(client:GetPos()) > 100 then
-            client:Notify("Door is too far")
-            return false
-        end
-
-        if not door:GetSaveTable().m_bLocked then
-            client:Notify("Door is already unlocked")
-            return false
-        end
-
-        -- Start lockpicking
-        client:SetAction("Lockpicking...", 5, function()
-            if math.random(1, 100) <= 75 then
-                door:Fire("unlock")
-                client:Notify("Lock picked successfully")
-
-                -- Reduce uses
-                local uses = item:GetData("uses", 3) - 1
-                if uses <= 0 then
-                    return true  -- Remove item
-                else
-                    item:SetData("uses", uses)
+            -- Reset after duration
+            timer.Simple(30, function()
+                if IsValid(client) then
+                    client:SetRunSpeed(240)
+                    client:Notify("Speed boost wore off")
                 end
-            else
-                client:Notify("Lockpick failed")
-            end
-        end)
+            end)
+        end
 
-        return false
+        return true
     end
 }
 ```
 
-### Radio
+### Faction-Specific Items
 
 ```lua
--- schema/items/sh_radio.lua
-ITEM.name = "Portable Radio"
-ITEM.description = "A two-way radio for communication"
-ITEM.model = "models/deadbodies/dead_male_civilian_radio.mdl"
-ITEM.width = 1
-ITEM.height = 2
-ITEM.category = "Communication"
-ITEM.price = 300
+-- Set during item definition
+ITEM.factionID = FACTION_POLICE
 
-function ITEM:OnInstanced(invID, x, y, item)
-    item:SetData("frequency", "100.0")
-    item:SetData("enabled", false)
-end
-
-function ITEM:GetDescription()
-    local desc = self.description
-    local freq = self:GetData("frequency", "100.0")
-    local enabled = self:GetData("enabled", false)
-
-    desc = desc .. "\n\nFrequency: " .. freq .. " MHz"
-    desc = desc .. "\nStatus: " .. (enabled and "On" or "Off")
-
-    return desc
-end
-
-ITEM.functions.Toggle = {
-    name = "Toggle Power",
-    OnRun = function(item)
-        local enabled = item:GetData("enabled", false)
-        item:SetData("enabled", not enabled)
-
-        item.player:EmitSound("buttons/button9.wav")
-        item.player:Notify("Radio " .. (enabled and "disabled" or "enabled"))
-
-        return false
-    end
-}
-
-ITEM.functions.SetFreq = {
-    name = "Set Frequency",
-    OnRun = function(item)
-        -- This would open a UI to set frequency
-        -- For simplicity, just randomize
-        local freq = math.random(80, 120) + math.random() * 0.9
-        item:SetData("frequency", string.format("%.1f", freq))
-
-        item.player:Notify("Frequency set to " .. item:GetData("frequency"))
-
-        return false
-    end
-}
-```
-
-## Best Practices
-
-### ✅ DO
-
-- Place item files in `schema/items/` folder
-- Use `sh_` prefix for item files
-- Set all required properties (name, description, model)
-- Use item:SetData() for instance-specific values
-- Use appropriate base items when possible
-- Validate input in OnRun functions
-- Check IsValid() on entities
-- Handle edge cases (nil values, disconnects)
-- Return true to remove item, false to keep
-
-### ❌ DON'T
-
-- Don't create items outside `schema/items/`
-- Don't modify ITEM table properties at runtime
-- Don't use item properties for instance data
-- Don't forget to check SERVER/CLIENT realm
-- Don't trust client-provided data
-- Don't create items without inventory space check
-- Don't forget return value in OnRun
-- Don't bypass item system
-
-## Common Patterns
-
-### Durability System
-
-```lua
-function ITEM:OnInstanced(invID, x, y, item)
-    item:SetData("durability", 100)
-end
-
-function ITEM:GetDescription()
-    local durability = self:GetData("durability", 100)
-    return self.description .. "\n\nDurability: " .. durability .. "%"
-end
-
-function ITEM:DamageDurability(amount)
-    local durability = self:GetData("durability", 100)
-    durability = durability - amount
-
-    if durability <= 0 then
-        self:Remove()
-    else
-        self:SetData("durability", durability)
-    end
-end
-```
-
-### Faction-Restricted Items
-
-```lua
-ITEM.faction = FACTION_POLICE
-
+-- Or check in hooks
 function ITEM:CanTransfer(oldInv, newInv)
-    local character = self:GetOwner():GetCharacter()
-
-    if character:GetFaction() != self.faction then
-        self:GetOwner():Notify("Only police can carry this")
-        return false
+    local owner = newInv:GetOwner()
+    if owner then
+        local character = owner:GetCharacter()
+        if character:GetFaction() != FACTION_POLICE then
+            return false
+        end
     end
-
     return true
 end
 ```
 
+## Testing Items
+
+1. **Give Item**: Use command or console to add item
+2. **Test Actions**: Click all action buttons
+3. **Test Transfer**: Move between inventories
+4. **Test Drop**: Drop item in world
+5. **Test Pickup**: Pick up dropped item
+6. **Test Persistence**: Disconnect and reconnect
+7. **Test with Multiple Players**: Trade items
+
 ## See Also
 
-- [Item System](../systems/items.md) - Detailed item system reference
+- [Item System](../systems/items.md) - Core item system reference
 - [Inventory System](../systems/inventory.md) - Inventory management
-- [Custom Items Guide](../guides/custom-items.md) - Step-by-step guide
+- [Character System](../systems/character.md) - Character inventories
+- [Schema Structure](structure.md) - Schema directory layout
 - Source: `gamemode/core/libs/sh_item.lua`
-- Base Items: `gamemode/items/base/`
+- Source: `gamemode/items/base/` - Base item types
